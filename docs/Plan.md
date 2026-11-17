@@ -168,8 +168,10 @@ The playing surface is 2:1. The camera frames the table to fill the window:
 
 A fingertip covers three balls, so nothing on a phone requires touching a ball.
 
-- **Mouse:** the cue follows the pointer. Wheel or arrow keys turn the aim in fine steps. Press and pull back
-  for power, release to shoot, push back to zero to cancel. Spin: click the cue-ball picture or use WASD.
+- **Mouse:** the cue follows the pointer. Wheel or arrow keys turn the aim in fine steps. Press and drag away
+  in any direction for power (the distance counts, not the direction: first tried along the cue's line, which
+  gave no power when pulling toward yourself, and ran into the window edge; changed 17 November), release to
+  shoot, back to the press point to cancel. Spin: click the cue-ball picture or use WASD.
 - **Touch:** drag anywhere to turn the aim; the drag is relative, and slower dragging turns finer. A fine-tune
   strip along the edge. A power slider under the thumb: pull and release. A large spin picker opens on tap. A
   loupe shows the point of contact enlarged while aiming.

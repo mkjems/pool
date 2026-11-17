@@ -167,6 +167,12 @@ function startGame(m: Mode, first: Player = 0) {
   updateScore();
   guideDirty = true;
   if (ruled()) toast(mode === "cpu" ? (game.turn === 0 ? "Your break" : "The computer breaks") : `${names[game.turn]} breaks`);
+  if (!store.get("hinted")) {
+    store.set("hinted", "1");
+    setTimeout(() => toast(matchMedia("(pointer: coarse)").matches
+      ? "Drag to aim. Pull the power bar down and let go to shoot."
+      : "Point to aim. Press, drag away and let go to shoot."), 2700);
+  }
 }
 
 function shoot(p: number) {
@@ -460,11 +466,10 @@ canvas.addEventListener("pointermove", (e) => {
   }
   if (e.pointerType === "mouse") {
     if (mouseDown) {
-      // Pull back: distance moved away from the target, in screen space.
-      const c = cueScreen();
-      const ahead = view.toScreen(balls[0].x + aim.x * 0.1, balls[0].y + aim.y * 0.1).sub(c).normalize();
-      const pulled = -((e.clientX - mouseDown.x) * ahead.x + (e.clientY - mouseDown.y) * ahead.y);
-      power = Math.max(0, Math.min(1, pulled / (0.3 * Math.min(innerWidth, innerHeight))));
+      // Power: how far the mouse has moved from where it was pressed, in any direction, so there is always room.
+      // Back near the press point means no shot.
+      const pulled = Math.hypot(e.clientX - mouseDown.x, e.clientY - mouseDown.y) - 6;
+      power = Math.max(0, Math.min(1, pulled / (0.24 * Math.min(innerWidth, innerHeight))));
       setPowerUI(power);
       guideDirty = true;
     } else if (fine || e.shiftKey) {
@@ -738,6 +743,8 @@ if (new URLSearchParams(location.search).has("test")) {
     shoot: (p: number) => shoot(p),
     labels: (on: boolean) => { labels = on; },
     quality: () => view.quality,
+    screen: (x: number, y: number) => { const p = view.toScreen(x, y); return { x: p.x, y: p.y }; },
+    aim: () => ({ x: aim.x, y: aim.y }),
     rack: (s: number) => { balls = rack8(s); resetViews(); guideDirty = true; },
     setGame: (g: Partial<GameState>) => { game = { ...game, ...g }; updateScore(); guideDirty = true; },
     place: (list: Array<[number, number, number]>) => {
