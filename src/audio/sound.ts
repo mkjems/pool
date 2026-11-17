@@ -30,10 +30,6 @@ export class Sound {
   private master!: GainNode;
   private wet!: GainNode;
   private noise!: AudioBuffer;
-  private rollLow!: GainNode;
-  private rollHigh!: GainNode;
-  private rollLp!: BiquadFilterNode;
-  private rollPan!: StereoPannerNode;
   private room!: GainNode;
   private recent: number[] = [];
   volume: Volume = "high";
@@ -97,25 +93,6 @@ export class Sound {
     this.wet = ctx.createGain();
     this.wet.gain.value = 0.22;
     this.wet.connect(conv).connect(this.master);
-
-    // Rolling: a low rumble through the slate and a quieter rustle of cloth, both following the balls' speed.
-    this.rollPan = ctx.createStereoPanner();
-    this.rollPan.connect(this.master);
-    const loop = (filter: BiquadFilterNode) => {
-      const src = ctx.createBufferSource();
-      src.buffer = this.noise; src.loop = true;
-      const g = ctx.createGain();
-      g.gain.value = 0;
-      src.connect(filter).connect(g).connect(this.rollPan);
-      src.start(0, Math.random());
-      return g;
-    };
-    this.rollLp = ctx.createBiquadFilter();
-    this.rollLp.type = "lowpass"; this.rollLp.frequency.value = 140; this.rollLp.Q.value = 0.9;
-    this.rollLow = loop(this.rollLp);
-    const bp = ctx.createBiquadFilter();
-    bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = 0.6;
-    this.rollHigh = loop(bp);
 
     // Room tone: the air of a quiet hall, very low. Off unless asked for.
     const rsrc = ctx.createBufferSource();
@@ -351,16 +328,5 @@ export class Sound {
       out[i] = (a * 0.9 + b * 2.0) * env * turn * 0.3;
     }
     return buf;
-  }
-
-  /** Every frame: total and speed-weighted position of the rolling balls. */
-  rolling(sumSpeed: number, x = 0) {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const s = Math.min(6, sumSpeed);
-    this.rollLow.gain.setTargetAtTime(Math.min(0.22, s * 0.04), t, 0.06);
-    this.rollHigh.gain.setTargetAtTime(Math.min(0.06, s * 0.01), t, 0.06);
-    this.rollLp.frequency.setTargetAtTime(160 + 60 * Math.min(s, 3), t, 0.1);
-    this.rollPan.pan.setTargetAtTime(Math.max(-0.6, Math.min(0.6, this.pan(x))), t, 0.1);
   }
 }

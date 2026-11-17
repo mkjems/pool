@@ -50,6 +50,7 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
 - Aiming with the mouse must work near the window edges: power is the drag distance in any direction.
 - Wants "air" around the table on big screens.
 - Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
+  No rolling sound: the noise-based one sounded like a sea breeze.
 - Improvement ideas: try them and keep what works.
 - Green cloth is the default (teal stays an option on the Cloth button). Slim rails with brushed metal caps.
 
@@ -479,7 +480,9 @@ Sizes are relative: S, M, L.
       hard cushion 0.41, pocket 0.33, a full break 0.84). Bodies of cushion and pocket sounds sit at 180-420 Hz
       so phone speakers play them.
 - [x] Rolling sound, reverb, room tone, vibration, volume settings.
-      Rolling: a low rumble and a quieter cloth hiss, panned to where the balls are. Room: early reflections
+      Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
+      "sounds like a sea breeze": the user asked for it off. A better try would need something other than
+      noise, or a recording. Room: early reflections
       and a 0.9 s tail darker as it decays. Room sound (the air of a hall) is off by default, in the menu.
       Volume: the Sound button steps high, medium, low, off; M mutes and unmutes. Vibration on the strike and
       on pots after touch input (Android; iPhones have no vibration API).

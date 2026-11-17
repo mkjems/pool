@@ -3,7 +3,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { DT, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
-import { Sim, isMoving, type Ball, type Shot, type SimEvent } from "./sim/physics";
+import { Sim, type Ball, type Shot, type SimEvent } from "./sim/physics";
 import { ball, rack8 } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
 import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
@@ -723,7 +723,6 @@ function frame(now: number) {
 
   const cur = sim ? sim.balls : balls;
   const alpha = sim ? Math.min(1, acc / DT) : 1;
-  let rolling = 0, rollingX = 0;
   for (const b of cur) {
     const v = ballViews[b.id];
     if (b.on) {
@@ -733,7 +732,6 @@ function frame(now: number) {
       const y = sim ? prevY[b.id] + (b.y - prevY[b.id]) * alpha : b.y;
       v.mesh.position.set(x, y, R);
       table.shadowBalls[b.id].set(x, y, R, 1);
-      if (isMoving(b)) { const sp = Math.hypot(b.vx, b.vy); rolling += sp; rollingX += sp * x; }
     } else if (v.drop >= 0) {
       // Into the pocket: slide to the hole and sink.
       v.drop += dt;
@@ -746,7 +744,6 @@ function frame(now: number) {
       table.shadowBalls[b.id].w = 0;
     }
   }
-  sound.rolling(rolling, rolling > 0 ? rollingX / rolling : 0);
 
   runCpu(dt);
   const aiming = state === "aim";
