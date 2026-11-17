@@ -14,7 +14,8 @@ html, body {
 }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 #hud { position: fixed; inset: 0; pointer-events: none; }
-#hud > * { pointer-events: auto; }
+/* Only real controls take the pointer; full-screen layers (labels, toast, score, bar) let it through to the table. */
+#hud > button, #hud > .power, #hud > .spin-pad, #hud > .menu { pointer-events: auto; }
 button {
   font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--edge);
   border-radius: 999px; padding: 6px 12px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
