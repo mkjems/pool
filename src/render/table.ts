@@ -353,7 +353,7 @@ export function makeTable(): TableView {
   // pocket openings run through them. Their bevel reaches as far as the wood's, covering its edge.
   const brushed = brushedTexture();
   brushed.repeat.set(1.5, 4);
-  const metalMat = new THREE.MeshStandardMaterial({ color: 0xd4d7dc, metalness: 1, roughness: 0.36, map: brushed });
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0xbabec4, metalness: 1, roughness: 0.36, map: brushed });
   metalMat.userData.env = 0.3;
   withBallShadows(metalMat, shadowBalls, 0.5, false, 0.12);
   // The outline in steps of a few millimetres, so every cap finds its stretch of it.

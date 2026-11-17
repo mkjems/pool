@@ -4,7 +4,7 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 6, look. Slimmer rails with metal pocket caps done (17 November), waiting on your eye; see
+**Current phase:** 6, look. Slimmer rails with metal pocket caps done and liked (17 November); see
 [Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
@@ -19,8 +19,8 @@ ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 a
 **Done since the handoff, to judge:** slimmer rails with metal caps (item 1 below). Rails 0.07 m of wood
 (was 0.115); brushed-steel L caps on the corners and plates over the side pockets; round pocket openings cut
 into the caps, with the cushion jaws pointing into them; round pearl sights; cushions a little brighter than the
-bed. 60 fps at 2560 × 1300 × 2 (headless Chromium). Open: whether the caps are the right brightness and size
-(`metalMat` and `ARM`/`PLATE` in `src/render/table.ts`), and whether the teal cloth should become the default.
+bed. 60 fps at 2560 × 1300 × 2 (headless Chromium). The user: "the new table is great, the caps are great",
+asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green cloth stays the default.
 
 **Asked for:**
 
@@ -51,9 +51,9 @@ bed. 60 fps at 2560 × 1300 × 2 (headless Chromium). Open: whether the caps are
 - Wants "air" around the table on big screens.
 - Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
 - Improvement ideas: try them and keep what works.
+- Green cloth is the default (teal stays an option on the Cloth button). Slim rails with brushed metal caps.
 
-**Next steps, in order unless the user says otherwise:** the user's verdict on the rails and caps; then
-sound (phase 5: the user may bring recordings), the cinematic break and replay (phase 6), friend matches
+**Next steps, in order unless the user says otherwise:** sound (phase 5: the user may bring recordings), the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
 swallowed all input and the code-driven tests did not notice), characters for the computer, and banks and
