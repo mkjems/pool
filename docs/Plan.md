@@ -4,9 +4,9 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 Nothing is built yet. The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 2 and 3. Phases 0 and 1 are done except what needs your phone and your hands. `npm run dev`
-gives a menu with two players on one device (full 8-ball rules) and a practice table (17 November 2026).
-Waiting on you: how aiming, power and the balls' readability feel on your phone and desktop.
+**Current phase:** 4, the computer opponent, is playable; phases 2 and 3 wait only on your feel for aiming and
+readability on a phone. `npm run dev`: play the computer (easy, medium, hard), two players on one device, or
+practice (17 November 2026). Next: phase 5 (sound) and 6 (look), or phase 7 (friend matches), in the order you choose.
 
 How to keep this plan up to date:
 
@@ -383,9 +383,18 @@ Sizes are relative: S, M, L.
 
 ### Phase 4: the computer opponent (M–L)
 
-- [ ] Shot search, Monte Carlo evaluation, safety play, in a worker.
+- [x] Shot search, Monte Carlo evaluation, safety play, in a worker.
+      `src/ai/ai.ts`, `src/ai/worker.ts`. Straight pots from every reachable ghost-ball position, in several
+      speeds and spins; each tried 5-9 times with the level's errors on the real physics and judged by the real
+      rules (pot and position, or what it leaves the opponent). Ball in hand: straight-in spots behind the
+      easiest pots. Safeties when fewer than 4 pots: thin and full hits on legal balls. Thinks ~0.1 s on average.
+      Not yet: banks, kicks and combinations on purpose (only when they happen to come out of the trials).
 - [ ] Difficulty levels and characters. The visible aiming.
-- [ ] Self-play test and balance report.
+      Levels and visible aiming done (it places the ball, sweeps the cue on, two practice strokes, backswing).
+      Aim error: easy 0.9°, medium 0.37°, hard 0.14°. Characters not yet.
+- [x] Self-play test and balance report.
+      `npm run selfplay -- hard medium 20`. 17 November: medium beat easy 5-1, hard beat medium 5-3, easy
+      games take ~28 shots, every game finished. Hard could be stronger: it looks only one shot ahead.
 
 **Exit:** you lose to the top level and beat the lowest, and the self-play test finishes thousands of games.
 

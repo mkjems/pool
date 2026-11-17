@@ -13,9 +13,10 @@ import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls
 import { CueView, GuideView, type GuidePath } from "./render/cue";
 import { Markers } from "./render/markers";
 import { Sound } from "./audio/sound";
+import type { Decision, Level } from "./ai/ai";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over";
-type Mode = "practice" | "pass";
+type Mode = "practice" | "pass" | "cpu";
 type GuideLevel = "full" | "short" | "off";
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -65,7 +66,79 @@ const frameTimes: number[] = [];
 table.setCloth(cloth);
 
 const shotSpeed = (p: number) => MAX_SPEED * Math.pow(p, 1.6);
-const names = ["Player 1", "Player 2"];
+const powerFor = (speed: number) => Math.pow(Math.min(1, speed / MAX_SPEED), 1 / 1.6);
+let names = ["Player 1", "Player 2"];
+/** Rules apply (not practice). */
+const ruled = () => mode !== "practice";
+/** The computer is to play: the human may only watch. */
+const cpuTurn = () => mode === "cpu" && game.turn === 1 && game.winner === null;
+
+// ------------------------------------------------------------------ the computer opponent
+
+let level: Level = (store.get("level") as Level) ?? "medium";
+const worker = new Worker(new URL("./ai/worker.ts", import.meta.url), { type: "module" });
+let askId = 0;
+interface CpuTurn { phase: "think" | "place" | "aim" | "pull" | "hold"; t: number; d: Decision | null; fromAim: number; toAim: number; fromX: number; fromY: number }
+let cpu: CpuTurn | null = null;
+worker.onmessage = (e: MessageEvent<{ id: number; decision: Decision }>) => {
+  if (!cpu || e.data.id !== askId) return;
+  cpu.d = e.data.decision;
+};
+
+const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+
+/** The computer's turn, step by step: think, place the cue ball, turn the cue onto the shot, pull back, play. */
+function runCpu(dt: number) {
+  if (state !== "aim" || !cpuTurn()) { cpu = null; return; }
+  if (!cpu) {
+    cpu = { phase: "think", t: 0, d: null, fromAim: 0, toAim: 0, fromX: 0, fromY: 0 };
+    askId++;
+    worker.postMessage({ id: askId, state: game, balls, level, seed: (Math.random() * 1e9) | 0 });
+    guide.hide();
+  }
+  cpu.t += dt;
+  const d = cpu.d;
+  if (cpu.phase === "think") {
+    if (!d || cpu.t < 0.7) return;
+    called = d.called; calledByUser = true;
+    cpu.fromX = balls[0].x; cpu.fromY = balls[0].y;
+    cpu.phase = d.place ? "place" : "aim";
+    cpu.t = 0;
+    cpu.fromAim = Math.atan2(aim.y, aim.x);
+    let to = Math.atan2(d.planned.dy, d.planned.dx);
+    while (to - cpu.fromAim > Math.PI) to -= 2 * Math.PI;
+    while (to - cpu.fromAim < -Math.PI) to += 2 * Math.PI;
+    cpu.toAim = to;
+  }
+  if (!d) return;
+  if (cpu.phase === "place") {
+    const k = easeInOut(Math.min(1, cpu.t / 0.6));
+    balls[0].x = cpu.fromX + (d.place!.x - cpu.fromX) * k;
+    balls[0].y = cpu.fromY + (d.place!.y - cpu.fromY) * k;
+    if (k >= 1) { cpu.phase = "aim"; cpu.t = 0; }
+  } else if (cpu.phase === "aim") {
+    // Sweep onto the line, settle with a last small correction, as a player does.
+    const dur = 0.5 + Math.min(0.6, Math.abs(cpu.toAim - cpu.fromAim) * 0.4);
+    const k = Math.min(1, cpu.t / dur);
+    const a = cpu.fromAim + (cpu.toAim - cpu.fromAim) * easeInOut(k) + Math.sin(k * Math.PI) * 0.01;
+    aim.set(Math.cos(a), Math.sin(a));
+    tip = { side: d.planned.side * k, height: d.planned.height * k };
+    updateSpinUI();
+    if (k >= 1) { aim.set(d.planned.dx, d.planned.dy); cpu.phase = "pull"; cpu.t = 0; }
+  } else if (cpu.phase === "pull") {
+    // Two practice strokes, then the backswing.
+    const target = powerFor(d.planned.speed);
+    const k = cpu.t / 1.1;
+    power = k < 0.6 ? target * 0.35 * (0.5 - 0.5 * Math.cos(k / 0.6 * 4 * Math.PI)) : target * easeInOut(Math.min(1, (k - 0.6) / 0.4));
+    setPowerUI(power);
+    if (k >= 1) { cpu.phase = "hold"; cpu.t = 0; }
+  } else if (cpu.phase === "hold" && cpu.t > 0.12) {
+    power = 0; setPowerUI(0);
+    const played = d.played;
+    cpu = null;
+    shootExact(played);
+  }
+}
 /** Where the cue ball may be put before this shot. */
 const inHand = () => (mode === "practice" ? "anywhere" : game.ballInHand);
 
@@ -75,6 +148,9 @@ function resetViews() {
 
 function startGame(m: Mode, first: Player = 0) {
   mode = m;
+  cpu = null;
+  names = mode === "cpu" ? ["You", "Computer"] : ["Player 1", "Player 2"];
+  document.querySelectorAll<HTMLElement>(".score .name").forEach((el, i) => { el.textContent = names[i]; });
   breaker = first;
   game = newGame(first);
   balls = rack8((Math.random() * 1e9) | 0);
@@ -87,18 +163,22 @@ function startGame(m: Mode, first: Player = 0) {
   updateSpinUI();
   $("#menu").hidden = true;
   $("#over").hidden = true;
-  $("#score").hidden = mode !== "pass";
+  $("#score").hidden = !ruled();
   updateScore();
   guideDirty = true;
-  if (mode === "pass") toast(`${names[game.turn]} breaks`);
+  if (ruled()) toast(mode === "cpu" ? (game.turn === 0 ? "Your break" : "The computer breaks") : `${names[game.turn]} breaks`);
 }
 
 function shoot(p: number) {
-  if (state !== "aim" || p < 0.015) return;
-  if (mode === "pass" && onEight(game, balls) && called === null) { toast("Tap a pocket to call the 8"); return; }
+  if (state !== "aim" || p < 0.015 || cpuTurn()) return;
+  if (ruled() && onEight(game, balls) && called === null) { toast("Tap a pocket to call the 8"); return; }
+  shootExact({ dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height });
+}
+
+function shootExact(shot: Shot) {
   sound.unlock();
   shotBefore = balls.map((b) => ({ ...b }));
-  pendingShot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height };
+  pendingShot = shot;
   state = "stroke";
   strokeT = 0;
   guide.hide();
@@ -145,24 +225,27 @@ function endOfShot() {
 
   const shooter = game.turn;
   const v = judge(game, shotBefore, balls, events, onEight(game, shotBefore) ? called : null);
+  if (mode === "cpu") v.message = v.message.replace("for you", shooter === 0 ? "for you" : "for the computer");
   game = advanceGame(game, balls, events, v);
   called = null; calledByUser = false;
   if (v.rerack) {
     toast(v.message);
-    setTimeout(() => startGame("pass", game.turn), 1800);
+    setTimeout(() => startGame(mode, game.turn), 1800);
     return;
   }
   if (game.winner !== null) {
     state = "over";
     updateScore();
-    $("#over-title").textContent = `${names[game.winner]} wins`;
+    $("#over-title").textContent = mode === "cpu" ? (game.winner === 0 ? "You win!" : "The computer wins") : `${names[game.winner]} wins`;
     $("#over-why").textContent = v.message;
     setTimeout(() => { $("#over").hidden = false; }, 900);
     return;
   }
   if (!balls[0].on) respawnCue();
   if (v.respot8) ballViews[8].mesh.visible = true;
-  const turnMsg = game.turn === shooter ? `${names[shooter]} again` : `${names[game.turn]} to play`;
+  const turnMsg = mode === "cpu"
+    ? (game.turn === 0 ? (shooter === 0 ? "Shoot again" : "Your turn") : (shooter === 1 ? "Computer again" : "Computer's turn"))
+    : game.turn === shooter ? `${names[shooter]} again` : `${names[game.turn]} to play`;
   toast(v.message ? `${v.message} ${turnMsg}.` : `${turnMsg}.`);
   updateScore();
 }
@@ -183,7 +266,7 @@ function placeCueAt(p: THREE.Vector2) {
 // ------------------------------------------------------------------ the scoreboard
 
 function updateScore() {
-  if (mode !== "pass") return;
+  if (!ruled()) return;
   for (const el of document.querySelectorAll<HTMLElement>(".score .p")) {
     const p = Number(el.dataset.p) as Player;
     el.classList.toggle("turn", game.turn === p && game.winner === null);
@@ -292,9 +375,9 @@ function computeGuide() {
   }
   guideFirst = first;
   // Calling the 8: suggest the pocket the guide sends it to.
-  if (mode === "pass" && onEight(game, balls) && !calledByUser && eightPocket >= 0) called = eightPocket;
+  if (ruled() && onEight(game, balls) && !calledByUser && eightPocket >= 0) called = eightPocket;
 
-  const wrong = mode === "pass" && first >= 0 && !legalFirst(game, balls, first);
+  const wrong = ruled() && first >= 0 && !legalFirst(game, balls, first);
   const ghostColor = wrong ? 0xff5a4a : 0xffffff;
   if (guideLevel === "off") { guide.set([], ghost, ghostColor); return; }
   const paths: GuidePath[] = [{ points: cuePath, color: 0xffffff, width: 0.0035, opacity: 0.55 }];
@@ -351,10 +434,10 @@ function pocketNear(px: number, py: number): number {
 
 canvas.addEventListener("pointerdown", (e) => {
   sound.unlock();
-  if (state !== "aim") return;
+  if (state !== "aim" || cpuTurn()) return;
   canvas.setPointerCapture(e.pointerId);
   if (e.pointerType === "mouse" && e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
-  if (mode === "pass" && onEight(game, balls)) {
+  if (ruled() && onEight(game, balls)) {
     const pk = pocketNear(e.clientX, e.clientY);
     if (pk >= 0) { called = pk; calledByUser = true; toast("8 called"); return; }
   }
@@ -369,7 +452,7 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (state !== "aim") return;
+  if (state !== "aim" || cpuTurn()) return;
   if (dragging) {
     const p = view.toTable(e.clientX, e.clientY - (e.pointerType === "mouse" ? 0 : 36)); // above the finger
     if (p) placeCueAt(p);
@@ -419,11 +502,11 @@ canvas.addEventListener("pointerup", (e) => {
   }
 });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("wheel", (e) => { if (state === "aim") { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
+canvas.addEventListener("wheel", (e) => { if (state === "aim" && !cpuTurn()) { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
 
 // Power slider: pull down, release to shoot; back to the top cancels.
 power$.addEventListener("pointerdown", (e) => {
-  if (state !== "aim") return;
+  if (state !== "aim" || cpuTurn()) return;
   sound.unlock();
   power$.setPointerCapture(e.pointerId);
   const set = (y: number) => {
@@ -475,6 +558,13 @@ pad.addEventListener("pointerdown", (e) => {
 });
 
 // Menus, buttons and keys.
+function setLevel(l: Level) {
+  level = l;
+  store.set("level", l);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-level]")) b.setAttribute("aria-checked", String(b.dataset.level === l));
+}
+setLevel(level);
+for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-level]")) b.addEventListener("click", () => setLevel(b.dataset.level as Level));
 for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-mode]")) {
   b.addEventListener("click", () => { sound.unlock(); startGame(b.dataset.mode as Mode); });
 }
@@ -513,6 +603,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
   else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; }
+  else if (cpuTurn()) return;
   else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
   else if (k === "w") setTip(tip.side, tip.height + 0.1);
   else if (k === "s") setTip(tip.side, tip.height - 0.1);
@@ -611,16 +702,17 @@ function frame(now: number) {
   }
   sound.rolling(rolling);
 
+  runCpu(dt);
   const aiming = state === "aim";
-  if (aiming && guideDirty) computeGuide();
-  if (!aiming) guide.hide();
+  if (aiming && guideDirty && !cpuTurn()) computeGuide();
+  if (!aiming || cpuTurn()) guide.hide();
   // Which balls are yours: soft rings, only while asking for help (Space or the Numbers button).
-  if (aiming && labels && mode === "pass" && !game.breakShot) {
+  if (aiming && labels && ruled() && !game.breakShot) {
     const t = target(game, balls);
     markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
   } else markers.setRings([]);
-  markers.setCall(aiming && mode === "pass" && onEight(game, balls) ? called : null, clock);
-  markers.setHand(balls[0].x, balls[0].y, aiming && mode === "pass" && inHand() !== "none", clock);
+  markers.setCall(aiming && ruled() && onEight(game, balls) ? called : null, clock);
+  markers.setHand(balls[0].x, balls[0].y, aiming && ruled() && !cpuTurn() && inHand() !== "none", clock);
   updateLabels(cur);
 
   const pull = state === "stroke"
@@ -639,7 +731,8 @@ if (new URLSearchParams(location.search).has("test")) {
     state: () => state,
     game: () => ({ ...game, guideFirst, called }),
     balls: () => (sim ? sim.balls : balls).map((b) => ({ ...b })),
-    start: (m: Mode) => startGame(m),
+    start: (m: Mode, first: Player = 0) => startGame(m, first),
+    setLevel,
     aimAt: (x: number, y: number) => { aim.copy(new THREE.Vector2(x - balls[0].x, y - balls[0].y).normalize()); guideDirty = true; },
     setTip,
     shoot: (p: number) => shoot(p),

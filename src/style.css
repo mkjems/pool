@@ -130,3 +130,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .mini { width: 11px; height: 11px; }
 }
 .bar nav button.on { border-color: var(--accent); color: var(--accent); }
+.levels { display: flex; gap: 6px; justify-content: center; margin-bottom: 2px; }
+.levels button { flex: 1; padding: 6px 10px; font-size: 13px; }
+.levels button[aria-checked="true"] { border-color: var(--accent); color: var(--accent); }

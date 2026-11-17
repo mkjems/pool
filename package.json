@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "engines": "node tests/engines.mjs",
-    "bench": "node tests/bench.mjs"
+    "bench": "node tests/bench.mjs",
+    "selfplay": "node tests/selfplay.mjs"
   },
   "dependencies": {
     "three": "^0.181.2"

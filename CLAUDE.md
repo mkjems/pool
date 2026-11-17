@@ -9,7 +9,8 @@ is done (tick steps, move **Current phase**, add short notes under steps).
 - `npm run dev`: the game on http://localhost:5173 (also on the local network, for trying it on a phone).
 - `npm test`: physics reference shots (Vitest). `npm run engines`: the same 200 shots in V8 and in Safari's
   JavaScriptCore, compared bit for bit (macOS only). `npm run bench`: how fast a break simulates.
-  Run all three after changing anything under `src/sim`.
+  Run all three after changing anything under `src/sim`. `npm run selfplay -- hard medium 20`: computer against
+  computer (levels, games), for balance and to check every game finishes.
 - `npm run build`: typecheck and build into `dist/`.
 - `?test` in the address exposes `window.__pool` (rack, aim, shoot, place balls) for browser tests and screenshots.
 
@@ -19,6 +20,7 @@ is done (tick steps, move **Current phase**, add short notes under steps).
   `Math.sin/cos/atan2/hypot/exp/pow` or `Math.random` (see `constants.ts`). Send directions as x/y, not angles.
 - `src/render/`: three.js. Table built in simulation coordinates (x along, y across, z up) inside a group
   turned upright. Ball patterns are computed in the shader; lamp shadows of the balls are computed per pixel.
+- `src/ai/`: the computer opponent, pure (runs in a Web Worker in the game, in Node for tests).
 - `src/audio/`: synthetic sounds (Web Audio) until real recordings replace them.
 - `src/main.ts`: the frame loop, input and the practice table.
 

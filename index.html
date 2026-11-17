@@ -40,9 +40,15 @@
       <div class="card">
         <h1>Pool</h1>
         <p>8-ball with real physics.</p>
-        <button data-mode="pass" class="primary">Two players, one device</button>
+        <div class="levels" role="radiogroup" aria-label="Computer level">
+          <button data-level="easy" role="radio">Easy</button>
+          <button data-level="medium" role="radio">Medium</button>
+          <button data-level="hard" role="radio">Hard</button>
+        </div>
+        <button data-mode="cpu" class="primary">Play the computer</button>
+        <button data-mode="pass">Two players, one device</button>
         <button data-mode="practice">Practice</button>
-        <p class="soon">Coming: play the computer, play a friend online.</p>
+        <p class="soon">Coming: play a friend online.</p>
       </div>
     </div>
     <div id="over" class="menu" hidden>
