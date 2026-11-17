@@ -1,0 +1,428 @@
+# Pool: the plan
+
+A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk. Written 16 November 2026.
+Nothing is built yet. The goal: a pool game that looks, sounds and plays better on the table than
+[8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
+
+**Current phase:** 0. The open questions were answered on 17 November 2026 (see [Answers](#answers)).
+
+How to keep this plan up to date:
+
+- Tick a step (`- [ ]` → `- [x]`) in the same commit as the work, once its tests pass.
+- A phase is done when its **Exit** condition holds, not when its boxes are ticked. Then move **Current phase** on.
+- Under a step, add a short indented line for anything learned that the next session needs.
+- When reality changes the plan, change the plan.
+
+## Is it possible?
+
+Yes, for everything that happens on the table: visuals, physics, sound, the computer opponent and friend
+matches. In those areas the reference game is beatable, because it is a simplified 2D game built for a huge
+audience and for selling coins.
+
+No, for what surrounds their table: millions of players to be matched with at any hour, tournaments, leagues,
+a shop. That needs accounts, anti-cheat and a company. This plan does not try, and treats its absence as a
+feature: no ads, no login, no coins.
+
+What I can and can't judge myself: I can look at screenshots and run tests, so visuals, physics correctness and
+network sync can be checked without you. I can't hear, and I can't feel how aiming works under a thumb. Sound
+and touch controls need your ears and hands, and the phases are ordered so you can try both early.
+
+## The reference game
+
+What I saw on 16 November 2026 was the start screen only: a choice between "Login with Miniclip ID" and "Play as
+Guest", an advertising banner on each side of the game, and a cookie banner. The rest of this section is from
+general knowledge of the game, not checked in this session:
+
+- A flat top-down table. Balls are drawn as rolling sprites, small on a phone.
+- Simplified physics. Follow, draw and sidespin exist, but the finer effects of real pool do not (see
+  [Physics](#physics)).
+- An aim line, a power bar, a spin picker. Matches cost coins; cues are bought and upgraded.
+- Playing a friend needs accounts on both sides.
+
+We take the genre, which belongs to nobody: 8-ball and its rules. We don't take their name, look, art or
+sounds. The game gets its own visual identity.
+
+## Goals
+
+1. **Looks real.** A 3D-rendered table under lamp light, balls that are real rolling spheres with reflections
+   and soft shadows, 60 frames a second on a phone.
+2. **Plays real.** Physics close to a real table: spin does what it does in real life.
+3. **Feels good in the hand.** Precise aiming with a mouse and with a thumb.
+4. **Sounds real.** Every collision sounds like its speed.
+5. **Fills the screen.** As large as the window allows on desktop, upright on a phone held upright.
+6. **Two ways to play:** against the computer, and against a friend through an invite link. No accounts.
+7. **Instant.** Playing within two seconds of opening the link. No ads, no sign-up, like the other games.
+
+Not goals: a public lobby with strangers, rankings, a currency, a shop, accounts.
+
+## Decisions
+
+Recommendations until you confirm them. Each can be changed in phase 0 at no cost.
+
+- **Real 3D, seen from above.** The table and balls are a 3D scene (three.js on WebGL 2) viewed from straight
+  above through a long lens, so it plays like a top-down game but the balls are spheres whose numbers and
+  stripes truly roll, with real highlights and shadows. The camera can drop to a low angle for the break, the
+  winning shot and replays. WebGL 2 rather than WebGPU: it runs on every phone, and a scene of 16 balls
+  doesn't need more.
+- **Our own physics, no physics library.** General engines (Rapier, cannon-es, Box2D) don't model sliding
+  against rolling, cloth friction or cushions the way pool needs, and aren't identical across browsers. Pool
+  physics is well described in the literature and is small: spheres on a plane.
+- **The physics is deterministic.** The same position and the same shot give exactly the same result in every
+  browser. One property pays for four features: friend matches send only the shot, replays are a few bytes, a
+  shot can be shared as a link, and the computer plans with the very physics you play on.
+- **A 7-foot table** (playing surface 1.98 × 0.99 m, balls 57.15 mm). On a 9-foot table a ball is about 14
+  points wide on a phone; on a 7-foot table about 19, a third larger. Smaller tables are also more tactical:
+  more clusters, more safety play. A 9-foot "match table" can be an option later.
+- **TypeScript, Vite, modules.** Not one file like Frontlines: the physics has to run in the page, in a Web
+  Worker (for the computer opponent) and in Node (for tests), so it must be a module of its own.
+- **One small Node server**, serving the files and relaying friend matches over WebSocket, as in Frontlines
+  (`~/Code/frontlines/server/relay.mjs`). Pairing by link and 4-character code: `pool.mkjems.dk/#KX7Q`.
+- **Everything visual is generated or CC0.** Ball textures, cloth and table geometry are made in code, so they
+  stay sharp at any size and need no artist. Wood and the reflected room can come from CC0 libraries (Poly Haven).
+- **Menus and score display are plain HTML over the canvas**, not drawn in 3D: sharp text, accessible, easy
+  to restyle.
+
+## Telling stripes from solids
+
+You noticed this is hard in the reference game. The causes, and what we do about each:
+
+| Cause | Fix |
+| --- | --- |
+| Balls are small, so a stripe is a few pixels | Bigger balls (7-foot table, table fills the screen), rendered at the screen's full resolution with proper filtering so stripes don't shimmer or blur. |
+| A striped ball seen with its band facing up looks almost fully coloured | Narrower band than on real balls (about 40% of the ball rather than 55%), so a clear white cap shows from every angle. Checked by rendering each ball from many angles and measuring the white share. |
+| A solid's white number spot can pass for a stripe's white | Small number spots on solids; stripes get a bright, slightly warm white that reads differently from a highlight. |
+| Similar colours: 3 red against 7 maroon, 4 purple against 8 black | A palette chosen for separation on screen, as television ball sets do (lighter 7, pinker 4). A colour-blind set as an option. |
+| The real question is "which are mine?" | Your balls get a soft ring of light on the cloth while you aim (can be switched off). |
+| | The ghost ball at the end of the aim line turns red when the first ball you would hit isn't yours. |
+| | A tray per player shows the balls left as flat icons, always facing you. Hovering or tapping one lights up that ball on the table. |
+| | Hold a key (Space) or a button and every ball shows a flat label: full colour for solids, white with a band for stripes. |
+
+The first four make the balls themselves readable; the last four mean you never have to read them. Both, because
+realism and readability pull in opposite directions on a small screen.
+
+## How to be better
+
+Ideas beyond "the same, but prettier". Marked **v1** if they belong in the first release.
+
+Play:
+
+- **Aim guides as a skill setting (v1).** Full: the object ball's path to the pocket and the cue ball's path
+  after contact, spin included. Short: stubs, as in most pool games. Off. Each player picks their own, which
+  also makes a fair match between a beginner and a good player.
+- **Honest physics you can learn from (v1).** Draw, follow and sidespin behave as on a real table, and the
+  guide shows the true result, so the game teaches real pool.
+- **Retry any shot** in practice: take the shot back and try it again with more spin. No other feature
+  teaches as much.
+- **Coach.** After a miss, show what would have gone in. A hint button shows the shot the computer would play
+  and why.
+- **Shot of the day.** One position a day, the same for everyone: clear the table in as few shots as you can,
+  share the result. Determinism makes it fair, and it needs no server.
+- **Trick shots and drills:** set positions with a goal.
+- **Handicaps for friends:** ball in hand after every miss, a guide for one player only, a head start.
+- **Other games on the same table:** 9-ball first.
+
+Show:
+
+- **Instant replay** of the last shot, slow motion, from a low camera. Automatic on the winning shot.
+- **Share a shot as a link.** The position and the shot fit in about a hundred characters; whoever opens the
+  link sees the shot played.
+- **Cinematic break:** the camera starts low behind the cue ball and rises as the rack explodes.
+- **A table that ages:** chalk marks on the cloth, a faint break spot, left by play.
+- **Your table:** cloth colour, wood, ball set. Free choices, or earned by play, never bought.
+
+Comfort:
+
+- **Portrait and landscape (v1).** Held upright, the table stands upright and fills the phone.
+- **Pass-and-play (v1):** two players on one device.
+- **Works offline** against the computer once loaded, installable on the home screen.
+- **No clock** by default. A shot clock is an option for friends who want one.
+- **Play by post:** a friend match you play one shot at a time over days. Needs the server to store games.
+- **Left-handed layout, reduced motion, colour-blind balls.**
+
+Opponents:
+
+- **Computer players with character (v1 in simple form):** named opponents who differ in accuracy and in
+  style (attacking, cautious, fond of bank shots), who visibly aim and feather the cue before shooting, and
+  who miss the way people miss.
+- **The computer never cheats (v1):** same physics, same inputs, no hidden knowledge.
+
+## The table on screen
+
+The playing surface is 2:1. The camera frames the table to fill the window:
+
+| Screen | Table | Ball diameter |
+| --- | --- | --- |
+| Phone, landscape (844 × 390 points) | lying, height-limited | about 19 points |
+| Phone, portrait (390 × 844) | standing, width-limited, controls below | about 19 points |
+| Laptop (1440 × 900) | lying | about 37 points |
+| Large monitor | lying, grows with the window | 50 and up |
+
+- On small screens the camera crops in to cushions and pockets and lets the wooden rail run off-screen; on
+  large screens the whole table and some floor show.
+- Rendered at the device's pixel ratio. If frames slow down, resolution drops first, then effects.
+- Score, ball trays and buttons sit over the rail or beside the table, never over the playing surface.
+
+## Controls
+
+A fingertip covers three balls, so nothing on a phone requires touching a ball.
+
+- **Mouse:** the cue follows the pointer. Wheel or arrow keys turn the aim in fine steps. Press and pull back
+  for power, release to shoot, push back to zero to cancel. Spin: click the cue-ball picture or use WASD.
+- **Touch:** drag anywhere to turn the aim; the drag is relative, and slower dragging turns finer. A fine-tune
+  strip along the edge. A power slider under the thumb: pull and release. A large spin picker opens on tap. A
+  loupe shows the point of contact enlarged while aiming.
+- **Ball in hand:** drag the cue ball; on touch it sits above the finger.
+- **Calling the 8:** tap a pocket.
+
+## Visuals
+
+- **Balls:** spheres with a glossy clear coat reflecting the lamps and the room. Textures (colours, stripes,
+  numbers) are drawn in code at load. Rotation comes from the physics, so spin is visible.
+- **Shadows:** computed exactly in the cloth's shader from the ball positions (a sphere over a plane has a
+  closed formula). Soft, sharp at every size, cheap on phones, no shadow maps.
+- **Cloth:** fine weave, slight variation, pools of light from three lamps fading towards the rails.
+- **Table:** wooden rails with inlaid sights, cloth-covered cushions, leather pockets, metal corners. Geometry
+  made in code.
+- **Cue:** a 3D cue with its shadow, a stroke animation, a puff of chalk.
+- **Finish:** filmic tone mapping, a little glow on highlights, a dark room around the table.
+- **Quality levels** picked by measured frame time.
+
+## Physics
+
+A real pool ball is always in one of four states: sliding, rolling, spinning in place, or still. Most of what
+makes pool pool comes from the sliding state and from friction between ball and cloth, ball and ball, ball and
+cushion. What we model, and the effects that follow from it without being scripted:
+
+| Modelled | What you get |
+| --- | --- |
+| Sliding and rolling friction, full 3D spin | Follow, draw and stop shots; a cue ball that curves after a cut shot; rolling balls leaving contact at about 30°, stunned ones at 90° |
+| Friction between balls | Throw: the object ball pushed slightly off line by a cut or by sidespin; spin passed from ball to ball |
+| Cushions with friction, speed-dependent bounce | Sidespin that widens or narrows a rebound; banks that shorten when hit hard |
+| The cue tip striking off-centre | Spin from where you hit; miscues near the edge; squirt (the cue ball leaving slightly off the aim line with sidespin) |
+| Pocket jaws as geometry | Balls that rattle in the jaws and hang on the lip |
+| Later: a raised cue | Swerve, masse and jump shots |
+
+Squirt and throw make aiming harder than in the reference game. The guide shows the true path with these
+effects included, so they deepen the game without making it unfair.
+
+How it's built:
+
+- A fixed small time step (start at 1/500 s, to be measured), with the exact moment of each contact found
+  inside a step, so the cut angle is right.
+- One interface, `shoot(position, shot)`, giving a stream of positions, a list of events (ball hit ball,
+  cushion, pocket) and the final position. The screen, the sounds, the rules, the computer opponent and the
+  network all work from that.
+- Starting values from published measurements (ball 170 g; sliding friction about 0.2; rolling resistance about
+  0.01; ball-to-ball bounce about 0.95; cushion bounce 0.6–0.9 by speed; ball-to-ball friction 0.03–0.08),
+  then tuned against known reference shots and by hand.
+
+Rules for determinism, learned in Frontlines (`~/Code/frontlines/docs/multiplayer.md`):
+
+- The simulation uses only `+ − × ÷` and `Math.sqrt`, never `Math.sin`, `cos`, `atan2`, `hypot`, `exp` or
+  `pow`, which differ in the last bit between Chrome and Safari. Curves that need them (friction against
+  speed) become tables or fractions.
+- A shot is sent as numbers already computed (direction as x and y, not as an angle).
+- How a ball is turned is for the eye only and kept out of the simulation, so drawing can use any maths.
+- A test runs the same shots in Node (Chrome's engine) and in `jsc` (Safari's) and compares every bit.
+
+## Rules
+
+8-ball by the world-standardised rules (WPA) as the base, written out in `docs/Rules.md` in phase 3: legal
+break, open table until the first called group, fouls give ball in hand, the 8 last into a called pocket.
+Recommended simplification: only the 8 needs a called pocket. Full call-shot can be an option.
+
+## Computer opponent
+
+- **Finds shots:** for each of its balls and each pocket, the direct shot, then banks, kicks and combinations.
+- **Tries them in its head:** each candidate is played many times on the real physics with small random
+  errors in aim, speed and spin. That gives the chance of potting and the position afterwards.
+- **Chooses** by chance of success times the quality of what's left, looking one shot ahead. With nothing
+  good on, it plays safe.
+- **Difficulty** is the size of its errors, how far it looks ahead and which shots it knows. No rubber-banding.
+- Runs in a Web Worker so the picture never stutters.
+- Computer against computer, thousands of games, is also the test that the rules never get stuck.
+
+## Friend matches
+
+- "Play a friend" gives a link and a code. The friend opens it and the game starts. An optional name, kept
+  in the browser.
+- **While aiming**, the cue's position is sent some 10–15 times a second, so you watch your friend aim live.
+- **A shot** is one small message: direction, speed, spin, cue angle. Both browsers play it on their own
+  physics. At rest they compare a checksum; if it ever differs, the shooter's position is taken and the
+  mismatch logged, because it means a determinism bug.
+- **Dropouts:** both browsers hold the whole game, so after a lost connection, a reload or a server restart
+  they rejoin by the same code and carry on.
+- **Versions:** both must run the same physics. The handshake compares versions and asks the older to reload.
+- Rematch, a few emotes, and optionally a shot clock.
+- The server holds rooms in memory, stores nothing and never runs a game. No cheating protection: these are
+  matches between friends.
+
+## Sound
+
+- Recorded samples, several per event, chosen and pitched by impact: ball on ball from a tick to a crack,
+  cushion, pocket drop and the ball running down the return, cue tip (soft, hard, miscue), chalk, the break.
+- Volume and brightness follow the impulse the physics reports; position on the table pans left to right.
+- A faint rolling sound for fast balls, a short room reverb, optional room tone. No music by default.
+- **Synthetic first.** The first sounds are made in code with Web Audio (no table to record on, answered 17
+  November). Real CC0 recordings that you find replace them later, event by event.
+- Vibration on shots and pots where the phone allows it.
+- You judge the sounds. I can wire, level and vary them, but not hear them.
+
+## Code layout
+
+```text
+src/sim/      physics and rules. No DOM, deterministic. Runs in page, worker and Node.
+src/ai/       the computer opponent (in a Web Worker)
+src/render/   three.js scene, materials, shaders, cameras
+src/input/    mouse, touch, keyboard
+src/audio/    Web Audio
+src/net/      friend matches, client side
+src/ui/       menus and score display (HTML)
+server/       static files and the WebSocket relay
+tests/        physics, rules, determinism, bot matches, browser tests
+docs/         this plan; later Rules.md, Physics.md
+```
+
+Dependencies: `three` in the browser, `ws` on the server. Budget: under 500 KB of code compressed; sounds
+and the room reflection load after the table is on screen.
+
+Tests, in the manner of Frontlines:
+
+- **Physics:** reference shots with known answers (the 30° rule, the 90° rule, stop shot, energy never grows).
+- **Determinism:** Node against `jsc`, bit for bit.
+- **Rules:** every foul and every way a game ends.
+- **Self-play:** computer against computer for thousands of games: no stuck games, sensible win rates per level.
+- **Matches:** two bots through a local relay with lag, dropouts and reloads.
+- **Browser:** Playwright loads the game, plays a shot, takes screenshots at phone and desktop sizes.
+
+## Deployment and homepage
+
+The usual recipe (`~/Code/infrastructure/docs/deploy-new-app.md`):
+
+| Value | Pool |
+| --- | --- |
+| Domain | `pool.mkjems.dk` |
+| GHCR image | `ghcr.io/mkjems/pool` |
+| VPS directory | `/opt/pool` |
+| Host port | `127.0.0.1:8087` (next free after 8086; check with `ss -ltnp`) |
+| Branch | `main` |
+
+- Infrastructure repository: DNS record, Caddy site block (Caddy passes WebSockets through as it is),
+  `/opt/pool`, the access log, the route table.
+- This repository: Dockerfile (Node 22, as Frontlines), `deploy.yml` that runs the tests first, the secrets.
+- GoatCounter script in `index.html`.
+
+Homepage (`~/Code/Homepage`), in phase 8:
+
+- A new first entry in `src/projects.ts`: slug `pool`, genre "Pool", players "vs. computer or a friend".
+- A screenshot at 1440 × 900, saved as `public/screens/pool.jpg` (1200 × 750).
+- "Five" becomes "six" in `src/App.tsx`, in `index.html` (description and `og:description`) and in
+  `README.md`; add the URL to `public/sitemap.xml`.
+
+## Phases
+
+Sizes are relative: S, M, L.
+
+### Phase 0: decisions and two experiments (S)
+
+- [ ] Answer the [open questions](#open-questions).
+- [ ] `git init`, repository `mkjems/pool`, Vite, TypeScript, Vitest, a `CLAUDE.md` with the working rules.
+- [ ] Experiment A: a bare 3D table with 16 balls, opened on your phone and your desktop. Measure frame
+      rate. Judge ball size and whether stripes read.
+- [ ] Experiment B: one ball sliding into rolling and one collision, run in Node and in `jsc`, compared bit
+      for bit.
+
+**Exit:** the decisions above are confirmed or changed, with numbers from both experiments.
+
+### Phase 1: physics (L)
+
+- [ ] Ball motion: sliding, rolling, spinning, still.
+- [ ] Ball against ball with friction. Ball against cushion. Pocket jaws and drops.
+- [ ] The cue strike: speed, spin, squirt, miscue.
+- [ ] `shoot()` with its event list. Reference-shot tests. Determinism test.
+- [ ] A plain 2D debug view to watch shots.
+
+**Exit:** the reference shots pass, Node and `jsc` agree, a full break runs in a few milliseconds.
+
+### Phase 2: the table on screen, and shooting (L)
+
+- [ ] 3D table, balls, cue, exact shadows, camera fitting any window, portrait and landscape.
+- [ ] Mouse and touch controls, power, spin picker, loupe, aim guide.
+- [ ] Readable balls: band width, palette, the measurement from many angles.
+- [ ] Deploy to `pool.mkjems.dk`, not linked from anywhere, so it can be tried on real phones.
+
+**Exit:** you can knock balls around on your phone and your desktop, and aiming feels precise on both.
+
+### Phase 3: the game of 8-ball (M)
+
+- [ ] `docs/Rules.md`, the rules engine, its tests.
+- [ ] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
+- [ ] Ball in hand, calling the 8, pass-and-play, rematch.
+
+**Exit:** two people can play a whole correct game on one device.
+
+### Phase 4: the computer opponent (M–L)
+
+- [ ] Shot search, Monte Carlo evaluation, safety play, in a worker.
+- [ ] Difficulty levels and characters. The visible aiming.
+- [ ] Self-play test and balance report.
+
+**Exit:** you lose to the top level and beat the lowest, and the self-play test finishes thousands of games.
+
+### Phase 5: sound (M)
+
+- [ ] Find or record samples. Wire events to sounds by impulse and position.
+- [ ] Rolling sound, reverb, room tone, vibration, volume settings.
+
+**Exit:** you say it sounds like a pool table.
+
+### Phase 6: look and polish (M–L)
+
+- [ ] Materials, lighting, room reflection, finish. Quality levels.
+- [ ] Cinematic break, replay of the last shot, the winning shot.
+- [ ] Start screen, settings, the game's own name and identity.
+
+**Exit:** side by side with the reference game in screenshots, ours is clearly the better looking.
+
+### Phase 7: friend matches (M)
+
+- [ ] The relay, invite link and code, handshake with version check.
+- [ ] Live aiming, shots, checksum, rejoin after a dropout.
+- [ ] Bot matches through a rough connection. Emotes, optional shot clock.
+
+**Exit:** you play a whole match against someone on another network, including a dropped connection.
+
+### Phase 8: on the homepage (S)
+
+- [ ] Screenshot, `projects.ts`, the texts, the sitemap. Share image and description for the game itself.
+
+**Exit:** the game is the first entry on mkjems.dk.
+
+### Phase 9: more, in the order you choose
+
+Retry any shot, coach and hints, share a shot as a link, shot of the day, trick shots and drills, 9-ball,
+table choices, play by post, masse and jump shots.
+
+## Risks
+
+- **Feel.** Physics can be correct and still feel wrong: cloth too fast, cushions dead. Tuning takes rounds of
+  you playing and me adjusting, which is why a playable table comes in phase 2, not at the end.
+- **Touch aiming.** The hardest design problem here. Phase 2 may need several attempts.
+- **Sound sources.** Good CC0 recordings of pool balls are scarce. Recording a real table for half an hour
+  may be the quickest route.
+- **Determinism between browsers.** Solved once in Frontlines, but this simulation has more maths. Experiment
+  B tests it before anything is built on it. The fallback (the shooter's result wins) keeps matches working
+  even if a difference slips through.
+- **The computer's thinking time on slow phones.** Fewer trials on slow devices; measured in phase 4.
+
+## Answers
+
+Given on 17 November 2026:
+
+1. Name and address: **Pool**, at `pool.mkjems.dk`.
+2. The room: **dark**, lamp-lit table. Cloth colour still to be picked from screenshots.
+3. **Realism** wherever possible.
+4. **Only the 8 is called.**
+5. Sounds: no table to record on. **Synthetic sounds first**; free recordings from the net may replace them later.
+6. Table: **7-foot**.
+7. Improvement ideas: **try them and keep what works.** Nothing beyond the v1 marks is fixed.

@@ -1,0 +1,25 @@
+{
+  "name": "pool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pool: 8-ball in the browser, against the computer or a friend. See docs/Plan.md.",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "engines": "node tests/engines.mjs",
+    "bench": "node tests/bench.mjs"
+  },
+  "dependencies": {
+    "three": "^0.181.2"
+  },
+  "devDependencies": {
+    "@types/three": "^0.181.0",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  }
+}
