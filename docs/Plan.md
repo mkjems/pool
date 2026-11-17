@@ -373,6 +373,7 @@ Sizes are relative: S, M, L.
 - [x] `docs/Rules.md`, the rules engine, its tests.
       `src/sim/rules.ts`, pure and deterministic like the physics, so the computer and the network can use it.
 - [x] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
+      Rings under your balls are shown only with the labels: permanent rings were not liked (17 November).
       Labels: hold Space, or the Numbers button on touch. The ghost ball turns red for an illegal first hit.
 - [x] Ball in hand, calling the 8, pass-and-play, rematch.
       Ball in hand: drag the cue ball (it sits above the finger on touch). The 8's pocket is called from
@@ -399,6 +400,10 @@ Sizes are relative: S, M, L.
 ### Phase 6: look and polish (M–L)
 
 - [ ] Materials, lighting, room reflection, finish. Quality levels.
+      17 November: first version ran at 20 fps on a 2× screen (three area lights and shadows over 9 million
+      pixels). Now one directional light, the lamp pools painted in the cloth shader, lamp reflections from the
+      environment map only on the balls: 60 fps at 2×. Resolution drops by itself if frames get slow.
+      Balls are drawn between the last two physics steps, so their motion is even at any frame rate.
 - [ ] Cinematic break, replay of the last shot, the winning shot.
 - [ ] Start screen, settings, the game's own name and identity.
 

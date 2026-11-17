@@ -1,7 +1,6 @@
 // Renderer, lights, reflections and the camera that fits the table to any screen.
 
 import * as THREE from "three";
-import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { R, TABLE_L, TABLE_W } from "../sim/constants";
 import { CUSHION_W, LAMPS, RAIL_W } from "./table";
 
@@ -20,6 +19,8 @@ export interface View {
   toScreen(x: number, y: number, z?: number): THREE.Vector2;
   /** Pixels per metre on the cloth, at the current size. */
   scale(): number;
+  /** Rendering resolution as a fraction of the screen's (lowered when frames are slow). */
+  quality: number;
 }
 
 /** Table coordinates (z up) to world (y up). */
@@ -69,21 +70,19 @@ export function makeView(canvas: HTMLCanvasElement): View {
   // Reflections only where they belong: each material says how much (userData.env), see applyEnvironment.
   const env = environment(renderer);
 
-  RectAreaLightUniformsLib.init();
-  for (const l of LAMPS) {
-    const light = new THREE.RectAreaLight(0xfff1dc, 12, 0.46, 0.2);
-    light.position.copy(toWorld(l.x, l.y, l.z));
-    light.lookAt(light.position.x, 0, light.position.z);
-    scene.add(light);
-  }
-  scene.add(new THREE.HemisphereLight(0x8a8f99, 0x1a120c, 0.08));
+  // One cheap light from above. The lamps' pools of light are painted in the table's shader (lampPool) and their
+  // reflections on the balls come from the environment map, so no per-pixel area lights are needed.
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
+  sun.position.copy(toWorld(0, 0.25, 3));
+  scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0x8a8f99, 0x1a120c, 0.12));
 
   const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 30);
   const view: View = {
-    renderer, scene, camera, portrait: false, env,
+    renderer, scene, camera, portrait: false, env, quality: 1,
     resize() {
       const w = window.innerWidth, h = window.innerHeight;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * view.quality);
       renderer.setSize(w, h, false);
       const portrait = h > w * 1.05;
       view.portrait = portrait;

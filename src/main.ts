@@ -58,6 +58,10 @@ let calledByUser = false;
 let labels = false;
 let clock = 0;
 let breaker: Player = 0;
+// Ball positions one physics step back, to draw smoothly between steps (a frame holds 6.67 steps at 60 Hz).
+const prevX = new Float64Array(16), prevY = new Float64Array(16);
+// Frame times, to lower the resolution if the device can't keep up.
+const frameTimes: number[] = [];
 table.setCloth(cloth);
 
 const shotSpeed = (p: number) => MAX_SPEED * Math.pow(p, 1.6);
@@ -532,10 +536,26 @@ function toast(msg: string) {
 
 // ------------------------------------------------------------------ frame loop
 
+/** Too slow for a minute's worth of frames? Draw at a lower resolution (never below half). */
+function adaptQuality(raw: number) {
+  if (raw > 0.1 || document.hidden) return; // tab switch or a hiccup
+  frameTimes.push(raw);
+  if (frameTimes.length < 60) return;
+  const sorted = [...frameTimes].sort((a, b) => a - b);
+  frameTimes.length = 0;
+  const median = sorted[30];
+  if (median > 0.021 && view.quality > 0.5) {
+    view.quality = Math.max(0.5, view.quality * 0.8);
+    view.resize();
+  }
+}
+
 let last = performance.now();
 function frame(now: number) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const raw = (now - last) / 1000;
+  const dt = Math.min(0.05, raw);
   last = now;
+  adaptQuality(raw);
   clock += dt;
 
   if (state === "stroke" && pendingShot) {
@@ -548,12 +568,14 @@ function frame(now: number) {
       pendingShot = null;
       state = "run";
       acc = 0;
+      for (const b of sim.balls) { prevX[b.id] = b.x; prevY[b.id] = b.y; }
     }
   }
   if (state === "run" && sim) {
     acc += dt;
     let n = 0;
     while (acc >= DT && n < 80) {
+      for (const b of sim.balls) { prevX[b.id] = b.x; prevY[b.id] = b.y; }
       sim.step();
       for (const b of sim.balls) if (b.on) turnBall(ballViews[b.id].mesh, b.wx, b.wy, b.wz, DT);
       acc -= DT;
@@ -563,13 +585,17 @@ function frame(now: number) {
   }
 
   const cur = sim ? sim.balls : balls;
+  const alpha = sim ? Math.min(1, acc / DT) : 1;
   let rolling = 0;
   for (const b of cur) {
     const v = ballViews[b.id];
     if (b.on) {
       if (v.drop < 0) v.mesh.visible = true;
-      v.mesh.position.set(b.x, b.y, R);
-      table.shadowBalls[b.id].set(b.x, b.y, R, 1);
+      // Between the last two physics steps: smooth motion at any frame rate, one step (2.5 ms) behind.
+      const x = sim ? prevX[b.id] + (b.x - prevX[b.id]) * alpha : b.x;
+      const y = sim ? prevY[b.id] + (b.y - prevY[b.id]) * alpha : b.y;
+      v.mesh.position.set(x, y, R);
+      table.shadowBalls[b.id].set(x, y, R, 1);
       if (isMoving(b)) rolling += Math.hypot(b.vx, b.vy);
     } else if (v.drop >= 0) {
       // Into the pocket: slide to the hole and sink.
@@ -588,8 +614,8 @@ function frame(now: number) {
   const aiming = state === "aim";
   if (aiming && guideDirty) computeGuide();
   if (!aiming) guide.hide();
-  // Which balls are yours: soft rings while aiming.
-  if (aiming && mode === "pass" && !game.breakShot) {
+  // Which balls are yours: soft rings, only while asking for help (Space or the Numbers button).
+  if (aiming && labels && mode === "pass" && !game.breakShot) {
     const t = target(game, balls);
     markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
   } else markers.setRings([]);
@@ -618,6 +644,7 @@ if (new URLSearchParams(location.search).has("test")) {
     setTip,
     shoot: (p: number) => shoot(p),
     labels: (on: boolean) => { labels = on; },
+    quality: () => view.quality,
     rack: (s: number) => { balls = rack8(s); resetViews(); guideDirty = true; },
     setGame: (g: Partial<GameState>) => { game = { ...game, ...g }; updateScore(); guideDirty = true; },
     place: (list: Array<[number, number, number]>) => {

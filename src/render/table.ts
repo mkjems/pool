@@ -77,14 +77,14 @@ function woodTexture() {
       const grain = 0.5 + 0.5 * Math.sin((v * 0.9 + warp) * 3.1);
       const streak = noise(u * 0.05, v * 6) * 0.5 + noise(u * 0.15, v * 14) * 0.3;
       const k = 0.62 + 0.22 * Math.pow(grain, 3) + 0.22 * streak + (Math.random() - 0.5) * 0.05;
-      d[i] = 128 * k; d[i + 1] = 46 * k; d[i + 2] = 18 * k; d[i + 3] = 255;
+      d[i] = 104 * k; d[i + 1] = 36 * k; d[i + 2] = 14 * k; d[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
   });
 }
 
 /** Adds the lamp shadows of every ball to a standard material, computed exactly per pixel. */
-function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1) {
+function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1, shadows = true) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uBalls = { value: balls };
     sh.uniforms.uLamps = { value: LAMPS };
@@ -106,7 +106,7 @@ float lampPool(vec3 p) {
     vec2 d = (p.xy - uLamps[k].xy) * vec2(1.5, 2.1);
     s += 1.0 / (1.0 + dot(d, d));
   }
-  return mix(0.5, 1.1, clamp(s / 1.9, 0.0, 1.0));
+  return mix(0.34, 1.22, clamp(s / 1.9, 0.0, 1.0));
 }
 float ballShadow(vec3 p) {
   float sh = 1.0;
@@ -133,9 +133,9 @@ float ballShadow(vec3 p) {
   return sh;
 }`,
       )
-      .replace("#include <opaque_fragment>", "#include <opaque_fragment>\ngl_FragColor.rgb *= ballShadow(vTablePos) * lampPool(vTablePos);");
+      .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= ${shadows ? "ballShadow(vTablePos) * " : ""}lampPool(vTablePos);`);
   };
-  m.customProgramCacheKey = () => "pool-shadowed-" + strength;
+  m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}`;
 }
 
 /** The wood's inner edge: the rectangle behind the cushions joined with the pocket holes. */
@@ -249,11 +249,10 @@ export function makeTable(): TableView {
     else ru.setXY(i, x * 0.8, y * 1.6);
   }
   const woodTex = woodTexture();
-  const woodMat = new THREE.MeshPhysicalMaterial({
-    map: woodTex, roughness: 0.55, clearcoat: 0.55, clearcoatRoughness: 0.18, metalness: 0,
-  });
-  woodMat.userData.env = 0.12;
-  withBallShadows(woodMat, shadowBalls, 0.5);
+  // A big area on screen: a plain standard material, lamp falloff only (balls never shade the rails much).
+  const woodMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.5, metalness: 0 });
+  woodMat.userData.env = 0.025;
+  withBallShadows(woodMat, shadowBalls, 0.5, false);
   const railMesh = new THREE.Mesh(railGeo, woodMat);
   group.add(railMesh);
 
@@ -293,7 +292,7 @@ export function makeTable(): TableView {
   // The floor, far below in the dark.
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(14, 14),
-    new THREE.MeshStandardMaterial({ color: 0x241d19, roughness: 0.85, map: woodTex }),
+    new THREE.MeshStandardMaterial({ color: 0x0d0a08, roughness: 0.85, map: woodTex }),
   );
   floor.position.z = -0.78;
   group.add(floor);
