@@ -73,13 +73,15 @@ export function judge(state: GameState, before: readonly Ball[], _after: readonl
   const potted = pots.filter((e) => e.a !== 0).map((e) => e.a);
   const firstEv = events.find((e) => e.type === "ball" && (e.a === 0 || e.b === 0)) as Extract<SimEvent, { type: "ball" }> | undefined;
   const first = firstEv ? (firstEv.a === 0 ? firstEv.b : firstEv.a) : -1;
-  const cushionAfter = !!firstEv && events.some((e) => e.type === "cushion" && e.t >= firstEv.t);
+  // The back of a pocket is part of the rail: a ball thrown back out of a pocket has reached a rail.
+  const railed = (e: SimEvent) => e.type === "cushion" || e.type === "rattle";
+  const cushionAfter = !!firstEv && events.some((e) => railed(e) && e.t >= firstEv.t);
   const wasOn8 = onEight(state, before);
   const eightDown = potted.includes(8);
   const v: Verdict = { foul: null, keepTurn: false, message: "", winner: null, respot8: false, rerack: false };
 
   if (state.breakShot) {
-    const cushioned = new Set(events.filter((e) => e.type === "cushion" && e.a !== 0).map((e) => (e as { a: number }).a));
+    const cushioned = new Set(events.filter((e) => railed(e) && e.a !== 0).map((e) => (e as { a: number }).a));
     if (scratch) v.foul = "Scratch on the break";
     else if (first < 0) v.foul = "Missed the rack";
     if (eightDown) v.respot8 = true;

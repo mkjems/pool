@@ -150,6 +150,36 @@ describe("cushions and pockets", () => {
     expect(side.events.find((e) => e.type === "pocket")).toMatchObject({ a: 1, pocket: 4 });
   });
 
+  /** A ball rolling at `v` m/s from 15 cm out, `deg` degrees off the pocket's axis. */
+  function intoPocket(pocket: number, v: number, deg: number) {
+    const P = TABLE.pockets[pocket];
+    const a = (deg * Math.PI) / 180;
+    const ux = P.ux * Math.cos(a) - P.uy * Math.sin(a), uy = P.ux * Math.sin(a) + P.uy * Math.cos(a);
+    const b = ball(1, P.mx - ux * 0.15, P.my - uy * 0.15);
+    Object.assign(b, { vx: ux * v, vy: uy * v, wx: (-uy * v) / R, wy: (ux * v) / R });
+    const sim = new Sim([ball(0, -0.6, -0.3), b]); // the cue ball out of the way
+    sim.run();
+    return sim;
+  }
+
+  it("takes firm pots, and throws a ball hit too hard back out off the back of the pocket", () => {
+    for (const v of [1, 2, 3]) {
+      const sim = intoPocket(3, v, 0);
+      expect(sim.events.some((e) => e.type === "pocket" && e.a === 1)).toBe(true);
+    }
+    // 8 m/s straight into a corner: the back throws it out before it sinks, and it stays on the table.
+    const slam = intoPocket(3, 8, 0);
+    expect(slam.events.some((e) => e.type === "rattle" && e.a === 1)).toBe(true);
+    expect(slam.events.some((e) => e.type === "pocket")).toBe(false);
+    expect(slam.balls[1].on).toBe(true);
+    expect(slam.balls[1].air).toBe(-1);
+    // The shallower side pocket takes less: at 5 m/s it throws the ball back across the table (which then rattles
+    // in the opposite side pocket and drops).
+    const side = intoPocket(4, 5, 0);
+    expect(side.events.find((e) => e.type === "rattle")).toMatchObject({ a: 1, pocket: 4 });
+    expect(side.events.some((e) => e.type === "pocket" && e.pocket === 4)).toBe(false);
+  });
+
   it("no ball ever leaves the table", () => {
     for (let g = 1; g <= 30; g++) {
       const sim = new Sim(rack8(g));

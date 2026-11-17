@@ -28,6 +28,18 @@ export interface Pocket {
   hx: number; hy: number; hr: number;
   /** The two cushion noses. */
   noses: [Point, Point];
+  /**
+   * The hole in the bed, seen from above: a capsule (segment a-b thickened by r) across the mouth. Its near edge
+   * is the drop line: past it a ball's centre is over the hole and the ball starts to fall.
+   */
+  opening: { ax: number; ay: number; bx: number; by: number; r: number };
+}
+
+/** The opening's capsule for a pocket: as wide as the mouth, the near edge on the drop line. */
+function opening(kind: Pocket["kind"], mx: number, my: number, ux: number, uy: number, drop: number): Pocket["opening"] {
+  const r = kind === "corner" ? 0.06 : 0.047, half = kind === "corner" ? 0.01 : 0.02;
+  const cx = mx + ux * (drop + r), cy = my + uy * (drop + r);
+  return { ax: cx - uy * half, ay: cy + ux * half, bx: cx + uy * half, by: cy - ux * half, r };
 }
 
 export const CORNER_MOUTH = 0.117; // between the noses, 4.6 in
@@ -88,7 +100,10 @@ function build() {
       segments.push(segment(p2.x, p2.y, p2.x + sx * cjy * JAW_LEN, p2.y + sy * cjx * JAW_LEN, mx, my, "jaw"));
       points.push(p1, p2);
       const hd = 0.034;
-      pockets.push({ id, kind, mx, my, ux, uy, drop: CORNER_DROP, hx: mx + ux * hd, hy: my + uy * hd, hr: 0.064, noses: [p1, p2] });
+      pockets.push({
+        id, kind, mx, my, ux, uy, drop: CORNER_DROP, hx: mx + ux * hd, hy: my + uy * hd, hr: 0.064, noses: [p1, p2],
+        opening: opening(kind, mx, my, ux, uy, CORNER_DROP),
+      });
     } else {
       const p1: Point = { x: -SIDE_MOUTH / 2, y: sy * HW };
       const p2: Point = { x: SIDE_MOUTH / 2, y: sy * HW };
@@ -96,7 +111,10 @@ function build() {
       segments.push(segment(p2.x, p2.y, p2.x - sjx * JAW_LEN, p2.y + sy * sjy * JAW_LEN, 0, sy * HW, "jaw"));
       points.push(p1, p2);
       const hd = 0.036;
-      pockets.push({ id, kind, mx: 0, my: sy * HW, ux: 0, uy: sy, drop: SIDE_DROP, hx: 0, hy: sy * (HW + hd), hr: 0.06, noses: [p1, p2] });
+      pockets.push({
+        id, kind, mx: 0, my: sy * HW, ux: 0, uy: sy, drop: SIDE_DROP, hx: 0, hy: sy * (HW + hd), hr: 0.06, noses: [p1, p2],
+        opening: opening(kind, 0, sy * HW, 0, sy, SIDE_DROP),
+      });
     }
   }
   return { segments, points, pockets };
@@ -104,12 +122,32 @@ function build() {
 
 export const TABLE = build();
 
-/** Which pocket a ball centre at (x, y) has dropped into, or -1. */
-export function pocketAt(x: number, y: number): number {
+/** Squared distance from (x, y) to a pocket opening's middle segment, and where along it (0..1). */
+export function openingDist2(o: Pocket["opening"], x: number, y: number): { d2: number; k: number } {
+  const dx = o.bx - o.ax, dy = o.by - o.ay;
+  let k = ((x - o.ax) * dx + (y - o.ay) * dy) / (dx * dx + dy * dy);
+  k = k < 0 ? 0 : k > 1 ? 1 : k;
+  const ex = x - o.ax - dx * k, ey = y - o.ay - dy * k;
+  return { d2: ex * ex + ey * ey, k };
+}
+
+/** Which pocket's opening a ball centre at (x, y) is over, or -1. */
+export function openingAt(x: number, y: number): number {
   for (const p of TABLE.pockets) {
-    if ((x - p.mx) * p.ux + (y - p.my) * p.uy > p.drop) return p.id;
+    const o = p.opening;
+    if (openingDist2(o, x, y).d2 < o.r * o.r) return p.id;
   }
   return -1;
+}
+
+/** The pocket whose mouth is nearest (x, y). */
+export function nearestPocket(x: number, y: number): number {
+  let best = 0, bd = Infinity;
+  for (const p of TABLE.pockets) {
+    const d = (x - p.mx) * (x - p.mx) + (y - p.my) * (y - p.my);
+    if (d < bd) { bd = d; best = p.id; }
+  }
+  return best;
 }
 
 /** True when a ball centred at (x, y) lies fully on the playing surface (inside the cushion noses). */

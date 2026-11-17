@@ -40,6 +40,14 @@ export function eCushion(vn: number): number {
   return 0.93 - (0.26 * vn) / (vn + 2.2);
 }
 
+/**
+ * Pockets. Past the drop line a ball is over the hole and falls freely; it is down once it has dropped this far
+ * (its centre then can't come back over the lip). Before that, the back of the pocket can throw it back out.
+ */
+export const LIP_DROP = 0.5 * R;
+/** Restitution of the back of the pocket (the facing under the rail, behind the liner). */
+export const POCKET_E = 0.5;
+
 /** Below these the ball counts as still. */
 export const EPS_V = 1e-4; // m/s
 export const EPS_W = 0.05; // rad/s, spin about the vertical axis

@@ -239,6 +239,27 @@ export class Sound {
     this.play(buf, at, this.pan(x), Sound.LEVEL.cushion);
   }
 
+  /** A ball hits the back of a pocket hard enough to bounce: a knock on the facing behind the liner. */
+  rattle(speed: number, x: number, delay = 0) {
+    if (!this.ctx) return;
+    const at = this.when(delay);
+    let v = Math.min(1, Math.pow(speed / 5, 0.8));
+    v *= this.allow(at, v);
+    if (v === 0) return;
+    const p = rand(0.94, 1.06);
+    const buf = this.render({
+      pulse: 0.0014, amp: 0.9 * v,
+      modes: [
+        { f: 260 * p, a: 0.25 * v, d: 0.035 },
+        { f: 640 * p, a: 0.2 * v, d: 0.022 },
+        { f: 1550 * p, a: 0.1 * v, d: 0.01 },
+        { f: 3600 * p, a: 0.06 * v, d: 0.004 },
+      ],
+      noise: { a: 0.1 * v, d: 0.01, lp: 2500 },
+    }, 0.2);
+    this.play(buf, at, this.pan(x), Sound.LEVEL.cushion);
+  }
+
   /** The cue tip strikes the cue ball. */
   cue(speed: number, miscue: boolean, delay = 0) {
     if (!this.ctx) return;

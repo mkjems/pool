@@ -57,7 +57,7 @@ describe("the break", () => {
 
   it("the 8 down on the break is spotted again, not a loss", () => {
     const balls = rack8(3);
-    const fake = [{ t: 0, type: "ball", a: 0, b: 1, speed: 8 }, { t: 0.5, type: "pocket", a: 8, pocket: 3, speed: 1, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 }] as const;
+    const fake = [{ t: 0, type: "ball", a: 0, b: 1, speed: 8 }, { t: 0.5, type: "pocket", a: 8, pocket: 3, speed: 1, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, air: 0.05 }] as const;
     const after = balls.map((b) => ({ ...b, on: b.id !== 8 }));
     const v = judge(newGame(0), balls, after, [...fake], null);
     expect(v).toMatchObject({ winner: null, respot8: true, keepTurn: true });
@@ -99,6 +99,13 @@ describe("fouls", () => {
     const balls = table([[0, P.mx - P.ux * 0.4, P.my - P.uy * 0.4], [3, -0.5, 0]]);
     const { v } = play(playing(groups), balls, { dx: P.ux, dy: P.uy, speed: 2, side: 0, height: 0 });
     expect(v.foul).toBe("Scratch");
+  });
+
+  it("a ball thrown back out of a pocket has reached a rail", () => {
+    const fake = [{ t: 0, type: "ball", a: 0, b: 1, speed: 4 }, { t: 0.3, type: "rattle", a: 1, pocket: 3, speed: 6 }] as const;
+    const balls = table([[0, -0.5, 0], [1, 0.8, 0.3], [9, 0, 0]]);
+    const v = judge({ ...newGame(0), breakShot: false, groups: ["solids", "stripes"] }, balls, balls, fake, null);
+    expect(v.foul).toBeNull();
   });
 
   it("no cushion after contact", () => {

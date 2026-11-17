@@ -60,7 +60,11 @@ its own moment in the simulation, a volume button, room sound in the menu, vibra
 **Pocket drops, done 17 November, to judge:** a potted ball now falls in 3D (`src/render/pocketfall.ts`), see
 phase 6. The user found the old slide-and-shrink "very bad" and asked for realism.
 
-**Next steps, in order unless the user says otherwise:** the user's verdict on the pocket drops; the sounds are
+**Pocket rejections, done 17 November** (the user loved the drops and asked for this): a ball hit too hard
+into a pocket can be thrown back out by the back of the pocket. In the physics, so the rules and the computer
+know. See phase 1.
+
+**Next steps, in order unless the user says otherwise:** the user's verdict on the rejections; the sounds are
 "fine for now" (they will look for recordings later); then the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
@@ -421,6 +425,13 @@ Sizes are relative: S, M, L.
       Integrated exactly per state between contacts; the step (1/400 s) only matters for finding contacts.
 - [x] Ball against ball with friction. Ball against cushion. Pocket jaws and drops.
       Reverse english barely changes a cushion angle (friction saturates); running english works. Tune by feel.
+      Pocket rejections (17 November): past the drop line (the near edge of `opening` in `src/sim/table.ts`)
+      a ball is over the hole (`air` >= 0): no friction, falling ½ G air². Down once it has dropped LIP_DROP
+      (half a radius, ~54 ms). Before that the back of the opening bounces it, with the cushion's contact
+      model and POCKET_E 0.5 (the facing's grip takes out the topspin, which otherwise drove every rejected
+      ball straight back in), and if it gets back over the lip it is on the cloth again. A "rattle" event;
+      the rules count it as reaching a rail. Rolling balls straight in: corners throw them out at ~8 m/s, at
+      20° from ~6 m/s; the shallower side pockets from ~4-5 m/s. Breaks pot 1.0 balls on average (was 1.1).
 - [x] The cue strike: speed, spin, squirt, miscue.
 - [x] `shoot()` with its event list. Reference-shot tests. Determinism test.
       As `Sim.strike()` and `Sim.step()`/`run()`. Tests: stun, 90° rule, throw, 30° rule, draw, follow,

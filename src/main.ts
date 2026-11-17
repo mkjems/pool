@@ -2,7 +2,7 @@
 
 import "./style.css";
 import * as THREE from "three";
-import { DT, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
+import { DT, G, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
 import { Sim, type Ball, type Shot, type SimEvent } from "./sim/physics";
 import { ball, rack8 } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
@@ -205,7 +205,7 @@ function onEvent(e: SimEvent) {
       // The fall into the pocket, drawn from the ball's motion as it dropped. It starts at e.t; playHeard sets
       // how far along that is on screen.
       const b = s.balls[e.a];
-      ballViews[e.a].fall = new Fall(e.pocket, b.x, b.y, e.vx, e.vy, e.wx, e.wy, e.wz);
+      ballViews[e.a].fall = new Fall(e.pocket, b.x, b.y, e.vx, e.vy, e.wx, e.wy, e.wz, e.air);
       newFalls.push({ fall: ballViews[e.a].fall!, t: e.t });
       break;
     }
@@ -222,6 +222,7 @@ function playHeard(shown: number) {
     if (e.type === "ball") sound.ball(e.speed, x, d);
     else if (e.type === "cushion") sound.cushion(e.speed, x, d);
     else if (e.type === "cue") sound.cue(e.speed, e.miscue, d);
+    else if (e.type === "rattle") sound.rattle(e.speed, x, d);
     else sound.pocket(e.speed, x, down, d);
   }
   heard.length = 0;
@@ -741,8 +742,10 @@ function frame(now: number) {
       // Between the last two physics steps: smooth motion at any frame rate, one step (2.5 ms) behind.
       const x = sim ? prevX[b.id] + (b.x - prevX[b.id]) * alpha : b.x;
       const y = sim ? prevY[b.id] + (b.y - prevY[b.id]) * alpha : b.y;
-      v.mesh.position.set(x, y, R);
-      table.shadowBalls[b.id].set(x, y, R, 1);
+      // Over a pocket's hole the ball is falling (it may still be thrown back out).
+      const z = b.air >= 0 ? R - 0.5 * G * b.air * b.air : R;
+      v.mesh.position.set(x, y, z);
+      table.shadowBalls[b.id].set(x, y, z, 1);
     } else if (v.fall) {
       // Into the pocket (src/render/pocketfall.ts).
       const f = v.fall;

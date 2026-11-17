@@ -25,6 +25,9 @@ be potted, or some ball (the cue ball included) must reach a cushion.
 
 The shooter keeps the table after potting a ball of their own group on a legal shot.
 
+A ball is potted when it drops. One hit too hard can bounce off the back of the pocket and come back out onto
+the table: it is not potted, but it has reached a cushion (the back of the pocket is part of the rail).
+
 ## Fouls
 
 - The cue ball is potted (scratch).

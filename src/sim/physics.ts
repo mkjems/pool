@@ -5,10 +5,10 @@
 // matters for finding contacts, and those are found at their exact moment inside each step.
 
 import {
-  DT, E_BALL, EPS_V, EPS_W, G, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE,
+  DT, E_BALL, EPS_V, EPS_W, G, LIP_DROP, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE, POCKET_E,
   CUSHION_COS, CUSHION_SIN, R, SPIN_DECEL, SQUIRT, eCushion, muBall,
 } from "./constants";
-import { TABLE, pocketAt, type Segment, type Point } from "./table";
+import { TABLE, nearestPocket, openingAt, openingDist2, type Segment, type Point } from "./table";
 
 export interface Ball {
   /** 0 is the cue ball, 1-15 the object balls. */
@@ -19,13 +19,17 @@ export interface Ball {
   wx: number; wy: number; wz: number;
   /** Still on the table (false once pocketed). */
   on: boolean;
+  /** Seconds since the ball went over a pocket's lip and started to fall, or -1 while it is on the cloth. */
+  air: number;
 }
 
 export type SimEvent =
   | { t: number; type: "ball"; a: number; b: number; speed: number }
   | { t: number; type: "cushion"; a: number; speed: number; x: number; y: number }
-  /** vx..wz: the ball's motion as it dropped (for drawing the fall; the ball is off the table after this). */
-  | { t: number; type: "pocket"; a: number; pocket: number; speed: number; vx: number; vy: number; wx: number; wy: number; wz: number }
+  /** vx..wz, air: the ball's motion as it went down (for drawing the rest of the fall). */
+  | { t: number; type: "pocket"; a: number; pocket: number; speed: number; vx: number; vy: number; wx: number; wy: number; wz: number; air: number }
+  /** A ball hit the back of a pocket while still high enough to bounce. */
+  | { t: number; type: "rattle"; a: number; pocket: number; speed: number }
   | { t: number; type: "cue"; a: number; speed: number; miscue: boolean };
 
 export interface Shot {
@@ -50,6 +54,7 @@ export function cloneBalls(balls: readonly Ball[]): Ball[] {
 
 export function isMoving(b: Ball): boolean {
   if (!b.on) return false;
+  if (b.air >= 0) return true;
   const ux = b.vx - R * b.wy, uy = b.vy + R * b.wx;
   return b.vx * b.vx + b.vy * b.vy > EPS_V2 || ux * ux + uy * uy > EPS_U2 || b.wz > EPS_W || b.wz < -EPS_W;
 }
@@ -67,6 +72,12 @@ function decaySpin(b: Ball, h: number) {
 
 /** Move a ball through time t on the cloth, with no contacts. Exact for each state. */
 export function advance(b: Ball, t: number) {
+  if (b.air >= 0) {
+    // Over the hole: nothing under it, so no friction; it falls (the drop is ½ G air², see checkPockets).
+    b.x += b.vx * t; b.y += b.vy * t;
+    b.air += t;
+    return;
+  }
   let guard = 0;
   while (t > 0 && guard++ < 4) {
     const ux = b.vx - R * b.wy, uy = b.vy + R * b.wx;
@@ -189,11 +200,14 @@ function collideBalls(a: Ball, b: Ball): number {
   return vn;
 }
 
-/** n: unit normal pointing from the cushion into the table. */
-function collideCushion(b: Ball, nx: number, ny: number): number {
+/**
+ * n: unit normal pointing from the cushion into the table. e: restitution, the cushion's own unless given (the
+ * back of a pocket, a firm facing a little above the ball's centre, uses the same contact with its own).
+ */
+function collideCushion(b: Ball, nx: number, ny: number, eGiven = -1): number {
   const vn = -(b.vx * nx + b.vy * ny); // approach speed
   if (vn <= 0) return 0;
-  const e = eCushion(vn);
+  const e = eGiven >= 0 ? eGiven : eCushion(vn);
   const ph = (1 + e) * vn; // horizontal normal impulse per unit mass
   const jn = ph / CUSHION_COS; // along the contact normal; the slate takes the vertical part
 
@@ -344,17 +358,43 @@ export class Sim {
     }
   }
 
+  /**
+   * Pockets. A ball whose centre passes over an opening leaves the cloth and falls. Once it has dropped LIP_DROP
+   * it is down. Until then the back of the pocket can bounce it, and if it gets back over the lip in time it lands
+   * on the cloth again: a ball hit too hard can be thrown out of the pocket.
+   */
   private checkPockets() {
     for (const b of this.balls) {
       if (!b.on) continue;
-      const p = pocketAt(b.x, b.y);
-      if (p < 0) continue;
-      const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-      const { vx, vy, wx, wy, wz } = b;
-      b.on = false;
-      b.vx = 0; b.vy = 0; b.wx = 0; b.wy = 0; b.wz = 0;
-      this.emit({ t: this.t, type: "pocket", a: b.id, pocket: p, speed, vx, vy, wx, wy, wz });
+      const p = openingAt(b.x, b.y);
+      if (b.air < 0) {
+        if (p >= 0) b.air = 0;
+        continue;
+      }
+      if (0.5 * G * b.air * b.air >= LIP_DROP) { this.down(b, p >= 0 ? p : nearestPocket(b.x, b.y)); continue; }
+      if (p < 0) { b.air = -1; continue; } // back over the cloth before it sank
+      // The back of the pocket: the far side of the opening's rim. The ball's side meets it with its centre R inside.
+      const P = TABLE.pockets[p], o = P.opening;
+      const { d2, k } = openingDist2(o, b.x, b.y);
+      const inner = o.r - R;
+      const qx = o.ax + (o.bx - o.ax) * k, qy = o.ay + (o.by - o.ay) * k;
+      if (d2 <= inner * inner || (b.x - qx) * P.ux + (b.y - qy) * P.uy <= 0) continue;
+      const d = Math.sqrt(d2);
+      const nx = (b.x - qx) / d, ny = (b.y - qy) / d;
+      b.x = qx + nx * inner; b.y = qy + ny * inner;
+      // Like a cushion, with the facing's own restitution; its grip takes out much of the ball's roll.
+      const s = collideCushion(b, -nx, -ny, POCKET_E);
+      if (s > 0) this.emit({ t: this.t, type: "rattle", a: b.id, pocket: p, speed: s });
     }
+  }
+
+  private down(b: Ball, p: number) {
+    const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+    const { vx, vy, wx, wy, wz, air } = b;
+    b.on = false;
+    b.air = -1;
+    b.vx = 0; b.vy = 0; b.wx = 0; b.wy = 0; b.wz = 0;
+    this.emit({ t: this.t, type: "pocket", a: b.id, pocket: p, speed, vx, vy, wx, wy, wz, air });
   }
 
   /** Run until everything is still (or maxTime passes). Returns the number of steps. */
@@ -373,6 +413,6 @@ export function fingerprint(balls: readonly Ball[]): string {
     f[0] = v;
     for (let k = 0; k < 2; k++) { h = Math.imul(h ^ w[k], 16777619) >>> 0; }
   };
-  for (const b of balls) { mix(b.on ? 1 : 0); mix(b.x); mix(b.y); mix(b.vx); mix(b.vy); mix(b.wz); }
+  for (const b of balls) { mix(b.on ? 1 : 0); mix(b.x); mix(b.y); mix(b.vx); mix(b.vy); mix(b.wz); mix(b.air); }
   return h.toString(16).padStart(8, "0");
 }

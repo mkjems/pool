@@ -17,7 +17,7 @@ export function rng(seed: number): () => number {
 }
 
 export function ball(id: number, x: number, y: number): Ball {
-  return { id, x, y, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, on: true };
+  return { id, x, y, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, on: true, air: -1 };
 }
 
 /**

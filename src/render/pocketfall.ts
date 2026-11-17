@@ -38,9 +38,10 @@ export class Fall {
   private o: (typeof OPENINGS)[number];
   private rot = new THREE.Quaternion();
 
-  constructor(pocket: number, x: number, y: number, vx: number, vy: number, wx: number, wy: number, wz: number) {
-    this.p = new THREE.Vector3(x, y, R);
-    this.v = new THREE.Vector3(vx, vy, 0);
+  /** air: how long the ball had already been falling when the physics called it down. */
+  constructor(pocket: number, x: number, y: number, vx: number, vy: number, wx: number, wy: number, wz: number, air = 0) {
+    this.p = new THREE.Vector3(x, y, R - 0.5 * G * air * air);
+    this.v = new THREE.Vector3(vx, vy, -G * air);
     this.w = new THREE.Vector3(wx, wy, wz);
     this.o = OPENINGS[pocket];
     // Cushion faces near this pocket: its jaws and the ends of the rails beside it.
