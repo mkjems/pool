@@ -1,12 +1,63 @@
 # Pool: the plan
 
 A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk. Written 16 November 2026.
-Nothing is built yet. The goal: a pool game that looks, sounds and plays better on the table than
+The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 4, the computer opponent, is playable; phases 2 and 3 wait only on your feel for aiming and
-readability on a phone. `npm run dev`: play the computer (easy, medium, hard), two players on one device, or
-practice (17 November 2026). Next: phase 5 (sound) and 6 (look), or phase 7 (friend matches), in the order you choose.
+**Current phase:** 6, look: slimmer rails with metal pocket caps (asked for on 17 November, see
+[Next session](#next-session)). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
+two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
+
+## Next session
+
+Handoff written 17 November 2026, end of the first working session. Start here.
+
+**State.** Everything is committed on `main` (local only: no GitHub repository, nothing pushed, nothing deployed;
+ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 and JavaScriptCore agree
+(`npm run engines`), `npm run selfplay` finishes every game. 60 fps at 2× on the user's Mac.
+
+**Asked for, not done yet:**
+
+1. **Slimmer rails, with the details of a real table** (17 November). The user sent a photo of a coin-op style
+   table seen from straight above. What it shows, compared with ours:
+   - The wood rails are much narrower: about a sixth of the cloth's width each side including the cushion,
+     where ours (`RAIL_W` 0.115 m + `CUSHION_W` 0.05 m in `src/render/table.ts`) look massive. Try `RAIL_W`
+     about 0.07 m; the camera fit in `src/render/scene.ts` follows from it.
+   - **Metal pocket caps**: brushed silver/chrome L-shaped caps wrapping each corner of the rail, and a
+     rectangular plate over each side pocket, with the black pocket opening cut into them. Ours has plain wood
+     with a thin leather torus.
+   - Pocket openings: black, rounded, with the cushion jaws showing as cloth-covered points into them.
+   - Sights: small round white dots, several along each rail, instead of our diamonds.
+   - Cushions read as a distinct strip of cloth, lit a little brighter than the bed, with a crisp nose line.
+   - Cloth in the photo is tournament teal/blue-green. We have that as an option (Cloth button); green stays
+     the default unless the user says otherwise.
+   Keep it original (our own design, not a copy of any product), and keep the frame time: check 60 fps at 2×
+   after the change (the measuring snippet is in the commit "Smooth: 60 fps" and below).
+2. The power bar overlaps the right cushion on a phone held upright (to judge on a real phone).
+
+**What the user has said so far** (the game should keep these):
+- Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.
+- No permanent helpers on the table: rings under the balls were rejected. Rings now show only with the
+  number labels (Space / Numbers).
+- Shadows must blend with the cloth, never black halos (now three lamp shadows, light and crisp, plus a
+  gentle contact shadow).
+- Aiming with the mouse must work near the window edges: power is the drag distance in any direction.
+- Wants "air" around the table on big screens.
+- Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
+- Improvement ideas: try them and keep what works.
+
+**Next steps, in order unless the user says otherwise:** the rails and pocket caps above (phase 6); then
+sound (phase 5: the user may bring recordings), the cinematic break and replay (phase 6), friend matches
+(phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
+measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
+swallowed all input and the code-driven tests did not notice), characters for the computer, and banks and
+kicks in its planning.
+
+**How to check the look and speed.** Run the dev server, open `http://localhost:5173/?test` in the Playwright
+browser, and drive it through `window.__pool` (`start('cpu' | 'pass' | 'practice')`, `place([[id, x, y], ...])`,
+`setGame({...})`, `aimAt(x, y)`, `screen(x, y)`, `shoot(power)`, `labels(true)`, `quality()`). Use real
+`page.mouse` events when testing input. Frame time: count 60 `requestAnimationFrame` intervals and take the
+median; the user's window is about 2560 × 1300 CSS pixels at device pixel ratio 2.
 
 How to keep this plan up to date:
 
