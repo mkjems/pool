@@ -4,8 +4,9 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 Nothing is built yet. The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 1 and 2 together. Phase 0 is done except trying Experiment A on your own phone. A practice
-table runs with `npm run dev`: aim, shoot, spin, sounds, no rules yet (17 November 2026).
+**Current phase:** 2 and 3. Phases 0 and 1 are done except what needs your phone and your hands. `npm run dev`
+gives a menu with two players on one device (full 8-ball rules) and a practice table (17 November 2026).
+Waiting on you: how aiming, power and the balls' readability feel on your phone and desktop.
 
 How to keep this plan up to date:
 
@@ -369,9 +370,13 @@ Sizes are relative: S, M, L.
 
 ### Phase 3: the game of 8-ball (M)
 
-- [ ] `docs/Rules.md`, the rules engine, its tests.
-- [ ] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
-- [ ] Ball in hand, calling the 8, pass-and-play, rematch.
+- [x] `docs/Rules.md`, the rules engine, its tests.
+      `src/sim/rules.ts`, pure and deterministic like the physics, so the computer and the network can use it.
+- [x] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
+      Labels: hold Space, or the Numbers button on touch. The ghost ball turns red for an illegal first hit.
+- [x] Ball in hand, calling the 8, pass-and-play, rematch.
+      Ball in hand: drag the cue ball (it sits above the finger on touch). The 8's pocket is called from
+      the guide; tap a pocket to change it.
 
 **Exit:** two people can play a whole correct game on one device.
 

@@ -84,3 +84,48 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .power { width: 40px; height: min(46vh, 300px); right: max(6px, env(safe-area-inset-right)); }
   .spin { width: 46px; height: 46px; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); }
 }
+
+.score {
+  position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; pointer-events: none;
+}
+.score[hidden] { display: none; }
+.score .p {
+  display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--edge); opacity: 0.55; transition: opacity 0.2s, border-color 0.2s;
+}
+.score .p.turn { opacity: 1; border-color: var(--accent); box-shadow: 0 0 14px rgba(240, 181, 74, 0.25); }
+.score .name { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.score .tray { display: flex; gap: 3px; min-height: 14px; align-items: center; color: var(--muted); font-size: 12px; }
+.mini {
+  width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex: none;
+  box-shadow: inset -2px -2px 3px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.22);
+}
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.label {
+  position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font: 800 11px/1 Inter, system-ui, sans-serif;
+  color: #111; box-shadow: 0 1px 4px rgba(0,0,0,0.6); border: 1.5px solid rgba(0,0,0,0.5);
+}
+.label span { background: #f6f2e8; border-radius: 50%; width: 13px; height: 13px; display: flex; align-items: center; justify-content: center; }
+.menu {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(6,6,7,0.35), rgba(6,6,7,0.85));
+}
+.menu[hidden] { display: none; }
+.menu .card {
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 260px; padding: 26px 28px;
+  background: rgba(16, 15, 14, 0.82); border: 1px solid var(--edge); border-radius: 18px; text-align: center;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 20px 60px #000;
+}
+.menu h1 { margin: 0; font: 800 34px/1.1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.01em; }
+.menu p { margin: 0 0 6px; color: var(--muted); }
+.menu .soon { margin: 6px 0 0; font-size: 12px; }
+.menu button { padding: 10px 16px; font-size: 15px; }
+.menu button.primary { background: var(--accent); color: #1a1206; border-color: transparent; font-weight: 700; }
+@media (max-width: 560px), (max-height: 560px) {
+  .score { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); }
+  .score .p { padding: 4px 9px; }
+  .mini { width: 11px; height: 11px; }
+}
+.bar nav button.on { border-color: var(--accent); color: var(--accent); }

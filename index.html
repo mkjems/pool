@@ -14,12 +14,18 @@
     <header class="bar">
       <a class="brand" href="https://mkjems.dk/" title="More games at mkjems.dk">Pool</a>
       <nav>
-        <button id="b-rack" title="New rack (R)">New rack</button>
+        <button id="b-menu" title="Menu">Menu</button>
+        <button id="b-labels" title="Show ball numbers (hold Space)">Numbers</button>
         <button id="b-guide" title="Aim guide (G)">Guide: full</button>
         <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
         <button id="b-sound" title="Sound (M)">Sound on</button>
       </nav>
     </header>
+    <div id="score" class="score" hidden>
+      <div class="p" data-p="0"><span class="name">Player 1</span><span class="tray"></span></div>
+      <div class="p" data-p="1"><span class="name">Player 2</span><span class="tray"></span></div>
+    </div>
+    <div id="labels" class="labels"></div>
     <div id="power" class="power" aria-label="Power: drag down and release to shoot">
       <div class="track"><div class="fill"></div><div class="knob"></div></div>
     </div>
@@ -30,6 +36,23 @@
       <div class="row"><button id="spin-reset">Centre</button><button id="spin-done">Done</button></div>
     </div>
     <div id="toast" class="toast" role="status"></div>
+    <div id="menu" class="menu">
+      <div class="card">
+        <h1>Pool</h1>
+        <p>8-ball with real physics.</p>
+        <button data-mode="pass" class="primary">Two players, one device</button>
+        <button data-mode="practice">Practice</button>
+        <p class="soon">Coming: play the computer, play a friend online.</p>
+      </div>
+    </div>
+    <div id="over" class="menu" hidden>
+      <div class="card">
+        <h1 id="over-title">Player 1 wins</h1>
+        <p id="over-why"></p>
+        <button id="b-rematch" class="primary">Rematch</button>
+        <button id="b-over-menu">Menu</button>
+      </div>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

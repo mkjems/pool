@@ -1,18 +1,21 @@
-// Pool: practice table (phase 2). Aim, shoot, watch the physics; the rules come in phase 3.
+// Pool: the frame loop, input, and the game around the table (practice, or two players on one device).
 
 import "./style.css";
 import * as THREE from "three";
-import { DT, MAX_SPEED, MAX_TIP, R } from "./sim/constants";
+import { DT, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
 import { Sim, isMoving, type Ball, type Shot, type SimEvent } from "./sim/physics";
 import { ball, rack8 } from "./sim/rack";
-import { HEAD_X, TABLE, onSurface } from "./sim/table";
+import { HEAD_X, TABLE } from "./sim/table";
+import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
 import { makeTable, CLOTHS, type Cloth } from "./render/table";
-import { makeBalls, spin as turnBall } from "./render/balls";
+import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls";
 import { CueView, GuideView, type GuidePath } from "./render/cue";
+import { Markers } from "./render/markers";
 import { Sound } from "./audio/sound";
 
-type State = "aim" | "stroke" | "run" | "place";
+type State = "menu" | "aim" | "stroke" | "run" | "over";
+type Mode = "practice" | "pass";
 type GuideLevel = "full" | "short" | "off";
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -23,6 +26,7 @@ view.scene.add(table.group);
 const ballViews = makeBalls(table.group);
 const cue = new CueView(table.group);
 const guide = new GuideView(table.group);
+const markers = new Markers(table.group);
 const sound = new Sound();
 applyEnvironment(view);
 
@@ -31,13 +35,15 @@ const store = {
   set(k: string, v: string) { try { localStorage.setItem("pool." + k, v); } catch { /* private mode */ } },
 };
 
-// ------------------------------------------------------------------ game state
+// ------------------------------------------------------------------ state
 
-let seed = (Math.random() * 1e9) | 0;
-let balls: Ball[] = rack8(seed);
+let mode: Mode = "practice";
+let game: GameState = newGame(0);
+let balls: Ball[] = rack8((Math.random() * 1e9) | 0);
+let shotBefore: Ball[] = [];
 let sim: Sim | null = null;
-let state: State = "aim";
-let aim = new THREE.Vector2(1, 0);
+let state: State = "menu";
+const aim = new THREE.Vector2(1, 0);
 let power = 0; // 0-1 while pulling back
 let tip = { side: 0, height: 0 };
 let guideLevel: GuideLevel = (store.get("guide") as GuideLevel) ?? "full";
@@ -46,26 +52,48 @@ let strokeT = 0;
 let pendingShot: Shot | null = null;
 let acc = 0;
 let guideDirty = true;
-let afterShotTimer = 0;
+let guideFirst = -1; // the ball the guide says gets hit first
+let called: number | null = null; // pocket called for the 8
+let calledByUser = false;
+let labels = false;
+let clock = 0;
+let breaker: Player = 0;
 table.setCloth(cloth);
 
 const shotSpeed = (p: number) => MAX_SPEED * Math.pow(p, 1.6);
+const names = ["Player 1", "Player 2"];
+/** Where the cue ball may be put before this shot. */
+const inHand = () => (mode === "practice" ? "anywhere" : game.ballInHand);
 
-function newRack() {
-  seed = (Math.random() * 1e9) | 0;
-  balls = rack8(seed);
+function resetViews() {
+  for (const v of ballViews) { v.drop = -1; v.mesh.visible = true; v.mesh.scale.setScalar(1); }
+}
+
+function startGame(m: Mode, first: Player = 0) {
+  mode = m;
+  breaker = first;
+  game = newGame(first);
+  balls = rack8((Math.random() * 1e9) | 0);
   sim = null;
   state = "aim";
   aim.set(1, 0);
   tip = { side: 0, height: 0 };
-  for (const v of ballViews) { v.drop = -1; v.mesh.visible = true; v.mesh.scale.setScalar(1); }
+  called = null; calledByUser = false;
+  resetViews();
   updateSpinUI();
+  $("#menu").hidden = true;
+  $("#over").hidden = true;
+  $("#score").hidden = mode !== "pass";
+  updateScore();
   guideDirty = true;
+  if (mode === "pass") toast(`${names[game.turn]} breaks`);
 }
 
 function shoot(p: number) {
   if (state !== "aim" || p < 0.015) return;
+  if (mode === "pass" && onEight(game, balls) && called === null) { toast("Tap a pocket to call the 8"); return; }
   sound.unlock();
+  shotBefore = balls.map((b) => ({ ...b }));
   pendingShot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height };
   state = "stroke";
   strokeT = 0;
@@ -73,13 +101,12 @@ function shoot(p: number) {
 }
 
 function onEvent(e: SimEvent) {
-  const b = (id: number) => balls.find((x) => x.id === id) ?? sim!.balls.find((x) => x.id === id)!;
   switch (e.type) {
     case "ball": sound.ball(e.speed, sim!.balls[e.a].x); break;
     case "cushion": sound.cushion(e.speed, e.x); break;
     case "cue": sound.cue(e.speed, e.miscue); if (e.miscue) toast("Miscue"); break;
     case "pocket": {
-      sound.pocket(e.speed, b(e.a).x);
+      sound.pocket(e.speed, TABLE.pockets[e.pocket].hx);
       const v = ballViews[e.a];
       const p = TABLE.pockets[e.pocket];
       v.drop = 0;
@@ -90,44 +117,124 @@ function onEvent(e: SimEvent) {
   }
 }
 
+function respawnCue() {
+  const c = balls[0];
+  Object.assign(c, { on: true, x: HEAD_X - 0.12, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 });
+  for (let k = 0; k < 200 && !free(c.x, c.y); k++) { c.x = HEAD_X - 0.05 - Math.random() * 0.3; c.y = (Math.random() - 0.5) * 0.8; }
+  ballViews[0].drop = -1; ballViews[0].mesh.visible = true; ballViews[0].mesh.scale.setScalar(1);
+}
+
 function endOfShot() {
+  const events = sim!.events;
   balls = sim!.balls;
   sim = null;
-  const cueBall = balls[0];
-  if (!cueBall.on) {
-    toast("Scratch: place the cue ball behind the line");
-    cueBall.on = true; cueBall.x = HEAD_X - 0.1; cueBall.y = 0;
-    cueBall.vx = cueBall.vy = cueBall.wx = cueBall.wy = cueBall.wz = 0;
-    freeSpot(cueBall);
-    ballViews[0].drop = -1; ballViews[0].mesh.visible = true; ballViews[0].mesh.scale.setScalar(1);
-    state = "place";
-  } else state = "aim";
-  if (balls.slice(1).every((b) => !b.on)) { toast("Table cleared!"); afterShotTimer = 1.6; }
   tip = { side: 0, height: 0 };
   updateSpinUI();
   guideDirty = true;
+  state = "aim";
+
+  if (mode === "practice") {
+    if (!balls[0].on) { toast("Scratch: drag the cue ball to place it"); respawnCue(); }
+    if (balls.slice(1).every((b) => !b.on)) { toast("Table cleared!"); setTimeout(() => startGame("practice"), 1600); }
+    return;
+  }
+
+  const shooter = game.turn;
+  const v = judge(game, shotBefore, balls, events, onEight(game, shotBefore) ? called : null);
+  game = advanceGame(game, balls, events, v);
+  called = null; calledByUser = false;
+  if (v.rerack) {
+    toast(v.message);
+    setTimeout(() => startGame("pass", game.turn), 1800);
+    return;
+  }
+  if (game.winner !== null) {
+    state = "over";
+    updateScore();
+    $("#over-title").textContent = `${names[game.winner]} wins`;
+    $("#over-why").textContent = v.message;
+    setTimeout(() => { $("#over").hidden = false; }, 900);
+    return;
+  }
+  if (!balls[0].on) respawnCue();
+  if (v.respot8) ballViews[8].mesh.visible = true;
+  const turnMsg = game.turn === shooter ? `${names[shooter]} again` : `${names[game.turn]} to play`;
+  toast(v.message ? `${v.message} ${turnMsg}.` : `${turnMsg}.`);
+  updateScore();
 }
 
-/** Nudge a ball until it overlaps nothing. */
-function freeSpot(b: Ball) {
-  for (let k = 0; k < 400; k++) {
-    if (balls.every((o) => o === b || !o.on || (o.x - b.x) ** 2 + (o.y - b.y) ** 2 >= 4 * R * R) && onSurface(b.x, b.y)) return;
-    b.x = HEAD_X - 0.05 - Math.random() * 0.35; b.y = (Math.random() - 0.5) * 0.8;
+function free(x: number, y: number) {
+  return balls.every((o) => o.id === 0 || !o.on || (o.x - x) ** 2 + (o.y - y) ** 2 >= 4 * R * R);
+}
+
+/** Move the cue ball (ball in hand) as close to p as the rules and the other balls allow. */
+function placeCueAt(p: THREE.Vector2) {
+  const b = balls[0];
+  const maxX = inHand() === "kitchen" ? HEAD_X : TABLE_L / 2 - R;
+  const x = Math.min(maxX, Math.max(-TABLE_L / 2 + R, p.x));
+  const y = Math.max(-TABLE_W / 2 + R, Math.min(TABLE_W / 2 - R, p.y));
+  if (free(x, y)) { b.x = x; b.y = y; guideDirty = true; }
+}
+
+// ------------------------------------------------------------------ the scoreboard
+
+function updateScore() {
+  if (mode !== "pass") return;
+  for (const el of document.querySelectorAll<HTMLElement>(".score .p")) {
+    const p = Number(el.dataset.p) as Player;
+    el.classList.toggle("turn", game.turn === p && game.winner === null);
+    const tray = el.querySelector<HTMLElement>(".tray")!;
+    tray.innerHTML = "";
+    if (!game.groups) { tray.textContent = game.breakShot && game.turn === p ? "break" : "open"; continue; }
+    const left = remaining(balls, game.groups[p]);
+    if (left.length === 0) { tray.appendChild(miniBall(8)); continue; }
+    for (const id of left) tray.appendChild(miniBall(id));
   }
 }
 
-function placeCueAt(p: THREE.Vector2) {
-  const b = balls[0];
-  const x = Math.min(HEAD_X, Math.max(-0.99 + R, p.x)), y = Math.max(-0.495 + R, Math.min(0.495 - R, p.y));
-  const ok = balls.every((o) => o === b || !o.on || (o.x - x) ** 2 + (o.y - y) ** 2 >= 4 * R * R);
-  if (ok) { b.x = x; b.y = y; guideDirty = true; }
+/** Stripes: a coloured band between white caps; solids: all colour. Flat, always facing you. */
+function flatBall(id: number) {
+  const c = ballColor(id);
+  return isStripe(id) ? `linear-gradient(#f6f2e8 0 25%, ${c} 25% 75%, #f6f2e8 75%)` : c;
+}
+
+function miniBall(id: number): HTMLElement {
+  const s = document.createElement("span");
+  s.className = "mini";
+  s.style.background = flatBall(id);
+  s.title = String(id);
+  return s;
+}
+
+// ------------------------------------------------------------------ number labels
+
+const labelEls: HTMLElement[] = [];
+for (let id = 1; id <= 15; id++) {
+  const el = document.createElement("div");
+  el.className = "label";
+  el.style.background = flatBall(id);
+  el.innerHTML = `<span>${id}</span>`;
+  el.hidden = true;
+  $("#labels").appendChild(el);
+  labelEls[id] = el;
+}
+function updateLabels(cur: readonly Ball[]) {
+  for (let id = 1; id <= 15; id++) {
+    const b = cur[id], el = labelEls[id];
+    el.hidden = !labels || !b.on;
+    if (el.hidden) continue;
+    const p = view.toScreen(b.x, b.y, R * 2);
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+  }
 }
 
 // ------------------------------------------------------------------ aim guide
 
 function computeGuide() {
   guideDirty = false;
-  if (state !== "aim" || guideLevel === "off") { guide.hide(); return; }
+  guideFirst = -1;
+  if (state !== "aim") { guide.hide(); return; }
   const s = new Sim(balls);
   const p = power > 0.015 ? power : 0.42;
   s.strike({ dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height });
@@ -136,10 +243,11 @@ function computeGuide() {
   let objPath: THREE.Vector2[] = [];
   let first = -1;
   let ghost: THREE.Vector2 | null = null;
-  let cueAfter = 0, objCushions = 0, cueCushions = 0;
-  const maxCueAfter = guideLevel === "full" ? 0.45 : 0.1;
-  const maxObj = guideLevel === "full" ? 1.6 : 0.3;
-  let objLen = 0;
+  let cueAfter = 0, objCushions = 0, cueCushions = 0, objLen = 0;
+  let eightPocket = -1;
+  const full = guideLevel === "full";
+  const maxCueAfter = full ? 0.45 : 0.1;
+  const maxObj = full ? 1.6 : 0.3;
   for (let i = 0; i < 4000 && s.moving(); i++) {
     const before = s.events.length;
     s.step();
@@ -151,38 +259,43 @@ function computeGuide() {
       }
       if (e.type === "cushion" && e.a === 0) cueCushions++;
       if (e.type === "cushion" && e.a === first) objCushions++;
+      if (e.type === "pocket" && e.a === 8 && eightPocket < 0) eightPocket = e.pocket;
     }
     const c = s.balls[0];
     const lastC = cuePath[cuePath.length - 1];
-    const done = cueAfter >= maxCueAfter || cueCushions > (guideLevel === "full" ? 1 : 0) || !c.on;
-    if (!done && c.on) {
+    const cueDone = cueAfter >= maxCueAfter || cueCushions > (full ? 1 : 0) || !c.on;
+    if (!cueDone) {
       const d = Math.hypot(c.x - lastC.x, c.y - lastC.y);
       if (d > 0.004) { cuePath.push(new THREE.Vector2(c.x, c.y)); if (first >= 0) cueAfter += d; }
     }
+    let objDone = first < 0;
     if (first >= 0) {
       const o = s.balls[first];
       const lastO = objPath[objPath.length - 1];
-      if (o.on && objLen < maxObj && objCushions < (guideLevel === "full" ? 2 : 1)) {
+      if (o.on && objLen < maxObj && objCushions < (full ? 2 : 1)) {
         const d = Math.hypot(o.x - lastO.x, o.y - lastO.y);
         if (d > 0.004) { objPath.push(new THREE.Vector2(o.x, o.y)); objLen += d; }
-      } else if (!o.on && lastO) {
-        const pk = s.events.find((e) => e.type === "pocket" && e.a === first);
-        if (pk && pk.type === "pocket") {
-          const P = TABLE.pockets[pk.pocket];
-          if (Math.hypot(lastO.x - P.hx, lastO.y - P.hy) > 0.01) objPath.push(new THREE.Vector2(P.hx, P.hy));
+      } else {
+        if (!o.on && objLen < maxObj) {
+          const pk = s.events.find((e) => e.type === "pocket" && e.a === first);
+          if (pk && pk.type === "pocket") objPath.push(new THREE.Vector2(TABLE.pockets[pk.pocket].hx, TABLE.pockets[pk.pocket].hy));
         }
         objLen = maxObj;
+        objDone = true;
       }
     }
-    if (done && (first < 0 ? true : objLen >= maxObj || objCushions >= 2 || !s.balls[first].on)) break;
-    if (first < 0 && cuePath.length > 2 && done) break;
+    if (cueDone && objDone && (first >= 0 || cueCushions > 0)) break;
   }
-  if (first < 0 && cuePath.length) {
-    // No ball hit: show where the cue ball goes (up to the cushion).
-  }
+  guideFirst = first;
+  // Calling the 8: suggest the pocket the guide sends it to.
+  if (mode === "pass" && onEight(game, balls) && !calledByUser && eightPocket >= 0) called = eightPocket;
+
+  const wrong = mode === "pass" && first >= 0 && !legalFirst(game, balls, first);
+  const ghostColor = wrong ? 0xff5a4a : 0xffffff;
+  if (guideLevel === "off") { guide.set([], ghost, ghostColor); return; }
   const paths: GuidePath[] = [{ points: cuePath, color: 0xffffff, width: 0.0035, opacity: 0.55 }];
-  if (objPath.length > 1) paths.push({ points: objPath, color: 0xffe7a3, width: 0.0045, opacity: 0.75 });
-  guide.set(paths, ghost);
+  if (objPath.length > 1 && !wrong) paths.push({ points: objPath, color: 0xffe7a3, width: 0.0045, opacity: 0.75 });
+  guide.set(paths, ghost, ghostColor);
 }
 
 // ------------------------------------------------------------------ input
@@ -195,6 +308,7 @@ function setPowerUI(p: number) {
 
 let mouseDown: { x: number; y: number } | null = null;
 let touch: { x: number; y: number; t: number; moved: number } | null = null;
+let dragging = false; // moving the cue ball (ball in hand)
 let fine = false;
 
 function cueScreen() { return view.toScreen(balls[0].x, balls[0].y); }
@@ -214,25 +328,49 @@ function rotateAim(rad: number) {
   guideDirty = true;
 }
 
+/** +1 if a counter-clockwise turn on the table is counter-clockwise on screen too. */
+function screenHandedness() {
+  const c = cueScreen();
+  const a = view.toScreen(balls[0].x + 0.1, balls[0].y).sub(c), b = view.toScreen(balls[0].x, balls[0].y + 0.1).sub(c);
+  return a.x * b.y - a.y * b.x < 0 ? 1 : -1; // screen y points down
+}
+
+/** A pocket near this screen point, for calling the 8. */
+function pocketNear(px: number, py: number): number {
+  const s = view.scale();
+  for (const p of TABLE.pockets) {
+    const q = view.toScreen(p.hx, p.hy, 0);
+    if (Math.hypot(q.x - px, q.y - py) < Math.max(26, p.hr * s * 1.3)) return p.id;
+  }
+  return -1;
+}
+
 canvas.addEventListener("pointerdown", (e) => {
   sound.unlock();
-  canvas.setPointerCapture(e.pointerId);
-  if (state === "place") { placeCueAt(view.toTable(e.clientX, e.clientY) ?? new THREE.Vector2(-9, 0)); return; }
   if (state !== "aim") return;
-  if (e.pointerType === "mouse") {
-    if (e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
-    mouseDown = { x: e.clientX, y: e.clientY };
-  } else {
-    touch = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
+  canvas.setPointerCapture(e.pointerId);
+  if (e.pointerType === "mouse" && e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
+  if (mode === "pass" && onEight(game, balls)) {
+    const pk = pocketNear(e.clientX, e.clientY);
+    if (pk >= 0) { called = pk; calledByUser = true; toast("8 called"); return; }
   }
+  // Ball in hand: grab the cue ball if the press is on it.
+  if (inHand() !== "none") {
+    const c = cueScreen();
+    const grab = Math.max(e.pointerType === "mouse" ? 14 : 28, R * view.scale() * 1.6);
+    if (Math.hypot(c.x - e.clientX, c.y - e.clientY) < grab) { dragging = true; return; }
+  }
+  if (e.pointerType === "mouse") mouseDown = { x: e.clientX, y: e.clientY };
+  else touch = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (state === "place") {
-    if (e.pointerType === "mouse" || e.buttons) placeCueAt(view.toTable(e.clientX, e.clientY) ?? new THREE.Vector2(-9, 0));
+  if (state !== "aim") return;
+  if (dragging) {
+    const p = view.toTable(e.clientX, e.clientY - (e.pointerType === "mouse" ? 0 : 36)); // above the finger
+    if (p) placeCueAt(p);
     return;
   }
-  if (state !== "aim") return;
   if (e.pointerType === "mouse") {
     if (mouseDown) {
       // Pull back: distance moved away from the target, in screen space.
@@ -248,34 +386,27 @@ canvas.addEventListener("pointermove", (e) => {
       const a0 = Math.atan2(e.clientY - e.movementY - c.y, e.clientX - e.movementX - c.x);
       const a1 = Math.atan2(e.clientY - c.y, e.clientX - c.x);
       let da = a1 - a0;
-      if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
-      rotateAim(-da * 0.1 * (view.portrait ? 1 : 1));
+      if (da > Math.PI) da -= 2 * Math.PI;
+      if (da < -Math.PI) da += 2 * Math.PI;
+      rotateAim(-da * 0.1 * screenHandedness());
     } else aimAt(e.clientX, e.clientY);
   } else if (touch) {
     // Relative aim: the finger's movement across the aim line turns it; slow movement turns finer.
     const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
     const now = performance.now();
-    const dt = Math.max(1, now - touch.t);
-    const speed = Math.hypot(dx, dy) / dt; // px per ms
+    const speed = Math.hypot(dx, dy) / Math.max(1, now - touch.t); // px per ms
     const gain = Math.max(0.12, Math.min(1, speed / 1.2));
     const c = cueScreen();
     const ahead = view.toScreen(balls[0].x + aim.x * 0.1, balls[0].y + aim.y * 0.1).sub(c).normalize();
-    // Perpendicular to the aim on screen, pointing to its right.
     const across = dx * -ahead.y + dy * ahead.x;
-    // Which way is "turn right" on screen depends on the view; measure it.
-    const probe = view.toScreen(balls[0].x + (aim.x * 0.1 - aim.y * 0.01), balls[0].y + (aim.y * 0.1 + aim.x * 0.01)).sub(c);
-    const ccwIsRight = probe.x * -ahead.y + probe.y * ahead.x > 0 ? 1 : -1;
-    rotateAim(across * gain * 0.0035 * ccwIsRight);
+    rotateAim(-across * gain * 0.0035 * screenHandedness());
     touch.moved += Math.hypot(dx, dy);
     touch.x = e.clientX; touch.y = e.clientY; touch.t = now;
   }
 });
 
 canvas.addEventListener("pointerup", (e) => {
-  if (state === "place") {
-    if (e.pointerType === "mouse" || (touch?.moved ?? 0) < 8) { state = "aim"; guideDirty = true; }
-    return;
-  }
+  if (dragging) { dragging = false; return; }
   if (e.pointerType === "mouse") {
     if (mouseDown) { mouseDown = null; const p = power; power = 0; setPowerUI(0); shoot(p); }
   } else if (touch) {
@@ -339,27 +470,42 @@ pad.addEventListener("pointerdown", (e) => {
   pad.onpointermove = (ev) => { if (ev.buttons) set(ev); };
 });
 
-// Buttons and keys.
-const guideBtn = $("#b-guide"), soundBtn = $("#b-sound");
+// Menus, buttons and keys.
+for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-mode]")) {
+  b.addEventListener("click", () => { sound.unlock(); startGame(b.dataset.mode as Mode); });
+}
+function showMenu() { state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; guide.hide(); }
+$("#b-menu").addEventListener("click", showMenu);
+$("#b-over-menu").addEventListener("click", showMenu);
+$("#b-rematch").addEventListener("click", () => startGame(mode, breaker === 0 ? 1 : 0));
+
+const guideBtn = $("#b-guide"), soundBtn = $("#b-sound"), labelsBtn = $("#b-labels");
 function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
 setGuide(guideLevel);
 function cycleCloth() {
   const keys = Object.keys(CLOTHS) as Cloth[];
   cloth = keys[(keys.indexOf(cloth) + 1) % keys.length];
-  table.setCloth(cloth); store.set("cloth", cloth); toast(`Cloth: ${cloth}`);
+  table.setCloth(cloth);
+  store.set("cloth", cloth);
+  toast(`Cloth: ${cloth}`);
 }
-function toggleSound() { sound.unlock(); sound.setMuted(!sound.muted); soundBtn.textContent = sound.muted ? "Sound off" : "Sound on"; store.set("muted", sound.muted ? "1" : "0"); }
+function toggleSound() {
+  sound.unlock();
+  sound.setMuted(!sound.muted);
+  soundBtn.textContent = sound.muted ? "Sound off" : "Sound on";
+  store.set("muted", sound.muted ? "1" : "0");
+}
 if (store.get("muted") === "1") { sound.setMuted(true); soundBtn.textContent = "Sound off"; }
-$("#b-rack").addEventListener("click", newRack);
 guideBtn.addEventListener("click", () => setGuide(guideLevel === "full" ? "short" : guideLevel === "short" ? "off" : "full"));
 $("#b-cloth").addEventListener("click", cycleCloth);
 soundBtn.addEventListener("click", toggleSound);
+labelsBtn.addEventListener("click", () => { labels = !labels; labelsBtn.classList.toggle("on", labels); });
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Shift") fine = true;
+  if (e.key === " ") { labels = true; e.preventDefault(); return; }
   const k = e.key.toLowerCase();
-  if (k === "r") newRack();
-  else if (k === "g") guideBtn.click();
+  if (k === "g") guideBtn.click();
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
   else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; }
@@ -369,7 +515,10 @@ window.addEventListener("keydown", (e) => {
   else if (k === "a") setTip(tip.side - 0.1, tip.height);
   else if (k === "d") setTip(tip.side + 0.1, tip.height);
 });
-window.addEventListener("keyup", (e) => { if (e.key === "Shift") fine = false; });
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Shift") fine = false;
+  if (e.key === " ") labels = labelsBtn.classList.contains("on");
+});
 window.addEventListener("resize", () => { view.resize(); guideDirty = true; });
 
 let toastTimer = 0;
@@ -378,7 +527,7 @@ function toast(msg: string) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => t.classList.remove("show"), 2200);
+  toastTimer = window.setTimeout(() => t.classList.remove("show"), 2600);
 }
 
 // ------------------------------------------------------------------ frame loop
@@ -387,6 +536,7 @@ let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  clock += dt;
 
   if (state === "stroke" && pendingShot) {
     // The cue swings forward from where it was pulled to, then strikes.
@@ -406,18 +556,18 @@ function frame(now: number) {
     while (acc >= DT && n < 80) {
       sim.step();
       for (const b of sim.balls) if (b.on) turnBall(ballViews[b.id].mesh, b.wx, b.wy, b.wz, DT);
-      acc -= DT; n++;
+      acc -= DT;
+      n++;
     }
     if (!sim.moving()) endOfShot();
   }
-  if (afterShotTimer > 0) { afterShotTimer -= dt; if (afterShotTimer <= 0) newRack(); }
 
   const cur = sim ? sim.balls : balls;
   let rolling = 0;
   for (const b of cur) {
     const v = ballViews[b.id];
     if (b.on) {
-      v.mesh.visible = true;
+      if (v.drop < 0) v.mesh.visible = true;
       v.mesh.position.set(b.x, b.y, R);
       table.shadowBalls[b.id].set(b.x, b.y, R, 1);
       if (isMoving(b)) rolling += Math.hypot(b.vx, b.vy);
@@ -435,11 +585,22 @@ function frame(now: number) {
   }
   sound.rolling(rolling);
 
-  if (state === "aim" && guideDirty) computeGuide();
-  if (state !== "aim") guide.hide();
-  const showCue = state === "aim" || state === "stroke";
-  const pull = state === "stroke" ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25) : 0.03 + power * 0.25;
-  cue.set(balls[0].x, balls[0].y, aim.x, aim.y, pull, tip.side, tip.height, showCue && balls[0].on);
+  const aiming = state === "aim";
+  if (aiming && guideDirty) computeGuide();
+  if (!aiming) guide.hide();
+  // Which balls are yours: soft rings while aiming.
+  if (aiming && mode === "pass" && !game.breakShot) {
+    const t = target(game, balls);
+    markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
+  } else markers.setRings([]);
+  markers.setCall(aiming && mode === "pass" && onEight(game, balls) ? called : null, clock);
+  markers.setHand(balls[0].x, balls[0].y, aiming && mode === "pass" && inHand() !== "none", clock);
+  updateLabels(cur);
+
+  const pull = state === "stroke"
+    ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25)
+    : 0.03 + power * 0.25;
+  cue.set(balls[0].x, balls[0].y, aim.x, aim.y, pull, tip.side, tip.height, (aiming || state === "stroke") && balls[0].on && !dragging);
 
   view.renderer.render(view.scene, view.camera);
   requestAnimationFrame(frame);
@@ -450,15 +611,20 @@ requestAnimationFrame(frame);
 if (new URLSearchParams(location.search).has("test")) {
   (window as unknown as Record<string, unknown>).__pool = {
     state: () => state,
+    game: () => ({ ...game, guideFirst, called }),
     balls: () => (sim ? sim.balls : balls).map((b) => ({ ...b })),
-    aimAt: (x: number, y: number) => { const d = new THREE.Vector2(x - balls[0].x, y - balls[0].y).normalize(); aim.copy(d); guideDirty = true; },
+    start: (m: Mode) => startGame(m),
+    aimAt: (x: number, y: number) => { aim.copy(new THREE.Vector2(x - balls[0].x, y - balls[0].y).normalize()); guideDirty = true; },
     setTip,
     shoot: (p: number) => shoot(p),
-    rack: (s: number) => { newRack(); seed = s; balls = rack8(s); },
+    labels: (on: boolean) => { labels = on; },
+    rack: (s: number) => { balls = rack8(s); resetViews(); guideDirty = true; },
+    setGame: (g: Partial<GameState>) => { game = { ...game, ...g }; updateScore(); guideDirty = true; },
     place: (list: Array<[number, number, number]>) => {
       balls = Array.from({ length: 16 }, (_, id) => { const b = ball(id, 0, 0); b.on = false; return b; });
-      for (const [id, x, y] of list) { balls[id].on = true; balls[id].x = x; balls[id].y = y; }
-      for (const v of ballViews) v.drop = -1;
+      for (const [id, x, y] of list) Object.assign(balls[id], { on: true, x, y });
+      resetViews();
+      updateScore();
       guideDirty = true;
     },
   };
