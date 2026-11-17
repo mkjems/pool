@@ -2,6 +2,7 @@
 // the sphere's own surface direction. No texture to blur or stretch: edges stay sharp at any size.
 
 import * as THREE from "three";
+import type { Fall } from "./pocketfall";
 import { R } from "../sim/constants";
 
 /**
@@ -67,13 +68,16 @@ function material(id: number): THREE.MeshPhysicalMaterial {
     sh.uniforms.uCell = { value: new THREE.Vector2(cell % 4, Math.floor(cell / 4)) };
     sh.uniforms.uAtlas = { value: atlas };
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vObjN;")
-      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvObjN = objectNormal;");
+      .replace("#include <common>", "#include <common>\nvarying vec3 vObjN;\nvarying float vDepth;")
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvObjN = objectNormal;")
+      // World y is height above the cloth (the table group stands the table's z up).
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvDepth = -(modelMatrix * vec4(transformed, 1.0)).y;");
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
         `#include <common>
 varying vec3 vObjN;
+varying float vDepth;
 uniform vec3 uColor; uniform int uKind; uniform vec2 uCell; uniform sampler2D uAtlas;
 float edge(float v, float e) { float w = fwidth(v) * 0.75; return smoothstep(e - w, e + w, v); }`,
       )
@@ -104,6 +108,15 @@ float edge(float v, float e) { float w = fwidth(v) * 0.75; return smoothstep(e -
 }`,
       );
   };
+  // Below the cloth, inside a pocket, the lamps' light is cut off by the pocket's walls: the deeper, the darker.
+  const shader0 = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    shader0(sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <opaque_fragment>",
+      "#include <opaque_fragment>\ngl_FragColor.rgb *= exp(-max(vDepth, 0.0) / 0.018);",
+    );
+  };
   m.customProgramCacheKey = () => "pool-ball";
   return m;
 }
@@ -111,10 +124,8 @@ float edge(float v, float e) { float w = fwidth(v) * 0.75; return smoothstep(e -
 export interface BallView {
   id: number;
   mesh: THREE.Mesh;
-  /** Pocket animation: time since it dropped, or -1. */
-  drop: number;
-  dropFrom: THREE.Vector3;
-  dropTo: THREE.Vector3;
+  /** Falling into a pocket, or null. */
+  fall: Fall | null;
 }
 
 export function makeBalls(parent: THREE.Object3D): BallView[] {
@@ -125,7 +136,7 @@ export function makeBalls(parent: THREE.Object3D): BallView[] {
     // Racked balls face every which way (looks only, so Math.random is fine here).
     mesh.quaternion.setFromEuler(new THREE.Euler(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28));
     parent.add(mesh);
-    views.push({ id, mesh, drop: -1, dropFrom: new THREE.Vector3(), dropTo: new THREE.Vector3() });
+    views.push({ id, mesh, fall: null });
   }
   return views;
 }

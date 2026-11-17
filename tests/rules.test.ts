@@ -57,7 +57,7 @@ describe("the break", () => {
 
   it("the 8 down on the break is spotted again, not a loss", () => {
     const balls = rack8(3);
-    const fake = [{ t: 0, type: "ball", a: 0, b: 1, speed: 8 }, { t: 0.5, type: "pocket", a: 8, pocket: 3, speed: 1 }] as const;
+    const fake = [{ t: 0, type: "ball", a: 0, b: 1, speed: 8 }, { t: 0.5, type: "pocket", a: 8, pocket: 3, speed: 1, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 }] as const;
     const after = balls.map((b) => ({ ...b, on: b.id !== 8 }));
     const v = judge(newGame(0), balls, after, [...fake], null);
     expect(v).toMatchObject({ winner: null, respot8: true, keepTurn: true });

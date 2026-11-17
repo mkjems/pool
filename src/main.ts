@@ -10,6 +10,7 @@ import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, t
 import { makeView, applyEnvironment } from "./render/scene";
 import { makeTable, CLOTHS, type Cloth } from "./render/table";
 import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls";
+import { Fall } from "./render/pocketfall";
 import { CueView, GuideView, type GuidePath } from "./render/cue";
 import { Markers } from "./render/markers";
 import { Sound, VOLUMES, type Volume } from "./audio/sound";
@@ -143,7 +144,7 @@ function runCpu(dt: number) {
 const inHand = () => (mode === "practice" ? "anywhere" : game.ballInHand);
 
 function resetViews() {
-  for (const v of ballViews) { v.drop = -1; v.mesh.visible = true; v.mesh.scale.setScalar(1); }
+  for (const v of ballViews) { v.fall = null; v.mesh.visible = true; }
 }
 
 function startGame(m: Mode, first: Player = 0) {
@@ -192,6 +193,8 @@ function shootExact(shot: Shot) {
 
 /** Events of this frame, to be heard at the moment they happened in the simulation (see playHeard). */
 const heard: Array<{ e: SimEvent; x: number; down: number }> = [];
+/** Falls into pockets that began this frame, with their simulation time. */
+const newFalls: Array<{ fall: Fall; t: number }> = [];
 
 function onEvent(e: SimEvent) {
   const s = sim!;
@@ -199,11 +202,11 @@ function onEvent(e: SimEvent) {
   switch (e.type) {
     case "cue": if (e.miscue) toast("Miscue"); break;
     case "pocket": {
-      const v = ballViews[e.a];
-      const p = TABLE.pockets[e.pocket];
-      v.drop = 0;
-      v.dropFrom.copy(v.mesh.position);
-      v.dropTo.set(p.hx, p.hy, -0.05);
+      // The fall into the pocket, drawn from the ball's motion as it dropped. It starts at e.t; playHeard sets
+      // how far along that is on screen.
+      const b = s.balls[e.a];
+      ballViews[e.a].fall = new Fall(e.pocket, b.x, b.y, e.vx, e.vy, e.wx, e.wy, e.wz);
+      newFalls.push({ fall: ballViews[e.a].fall!, t: e.t });
       break;
     }
   }
@@ -222,13 +225,17 @@ function playHeard(shown: number) {
     else sound.pocket(e.speed, x, down, d);
   }
   heard.length = 0;
+  // Falls: the screen shows the moment `shown`, so a fall that began at t is (shown - t) along (maybe a little
+  // less than nothing: then the ball is still drawn rolling in).
+  for (const { fall, t } of newFalls) { fall.target = shown - t; fall.fresh = true; }
+  newFalls.length = 0;
 }
 
 function respawnCue() {
   const c = balls[0];
   Object.assign(c, { on: true, x: HEAD_X - 0.12, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 });
   for (let k = 0; k < 200 && !free(c.x, c.y); k++) { c.x = HEAD_X - 0.05 - Math.random() * 0.3; c.y = (Math.random() - 0.5) * 0.8; }
-  ballViews[0].drop = -1; ballViews[0].mesh.visible = true; ballViews[0].mesh.scale.setScalar(1);
+  ballViews[0].fall = null; ballViews[0].mesh.visible = true;
 }
 
 function endOfShot() {
@@ -687,9 +694,12 @@ function adaptQuality(raw: number) {
 }
 
 let last = performance.now();
+/** Slow motion for tests and screenshots (?test: __pool.timeScale); at 0, time moves only by __pool.step. */
+let timeScale = 1, manualTime = 0;
 function frame(now: number) {
   const raw = (now - last) / 1000;
-  const dt = Math.min(0.05, raw);
+  let dt = Math.min(0.05, raw) * timeScale;
+  if (timeScale === 0 && manualTime > 0) { dt = Math.min(manualTime, 1 / 60); manualTime -= dt; }
   last = now;
   adaptQuality(raw);
   clock += dt;
@@ -718,7 +728,8 @@ function frame(now: number) {
       n++;
     }
     playHeard(sim.t - DT + acc);
-    if (!sim.moving()) endOfShot();
+    // The shot ends when everything is still and every potted ball has dropped out of sight.
+    if (!sim.moving() && !ballViews.some((v) => v.fall)) endOfShot();
   }
 
   const cur = sim ? sim.balls : balls;
@@ -726,19 +737,25 @@ function frame(now: number) {
   for (const b of cur) {
     const v = ballViews[b.id];
     if (b.on) {
-      if (v.drop < 0) v.mesh.visible = true;
+      if (!v.fall) v.mesh.visible = true;
       // Between the last two physics steps: smooth motion at any frame rate, one step (2.5 ms) behind.
       const x = sim ? prevX[b.id] + (b.x - prevX[b.id]) * alpha : b.x;
       const y = sim ? prevY[b.id] + (b.y - prevY[b.id]) * alpha : b.y;
       v.mesh.position.set(x, y, R);
       table.shadowBalls[b.id].set(x, y, R, 1);
-    } else if (v.drop >= 0) {
-      // Into the pocket: slide to the hole and sink.
-      v.drop += dt;
-      const k = Math.min(1, v.drop / 0.28);
-      v.mesh.position.lerpVectors(v.dropFrom, v.dropTo, k * k);
-      table.shadowBalls[b.id].set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z, v.mesh.position.z > 0 ? 1 : 0);
-      if (k >= 1) { v.drop = -1; v.mesh.visible = false; }
+    } else if (v.fall) {
+      // Into the pocket (src/render/pocketfall.ts).
+      const f = v.fall;
+      if (!f.fresh) f.target += dt;
+      f.fresh = false;
+      if (f.target < 0) {
+        v.mesh.position.set(f.p.x + f.v.x * f.target, f.p.y + f.v.y * f.target, R);
+      } else {
+        v.mesh.position.copy(f.update(v.mesh));
+      }
+      const z = v.mesh.position.z;
+      table.shadowBalls[b.id].set(v.mesh.position.x, v.mesh.position.y, z, z > 0 ? 1 : 0);
+      if (f.done) { v.fall = null; v.mesh.visible = false; }
     } else {
       v.mesh.visible = false;
       table.shadowBalls[b.id].w = 0;
@@ -781,6 +798,18 @@ if (new URLSearchParams(location.search).has("test")) {
     shoot: (p: number) => shoot(p),
     labels: (on: boolean) => { labels = on; },
     quality: () => view.quality,
+    timeScale: (k: number) => { timeScale = k; },
+    step: (seconds: number) => { manualTime += seconds; },
+    falls: () => ballViews.filter((v) => v.fall).map((v) => ({ id: v.id, target: v.fall!.target, z: v.fall!.p.z, done: v.fall!.done })),
+    /** Render now and return a square crop around a screen point (CSS px), as a PNG data URL. */
+    snap: (cx: number, cy: number, size: number) => {
+      view.renderer.render(view.scene, view.camera);
+      const src = view.renderer.domElement, k = src.width / window.innerWidth;
+      const c = document.createElement("canvas");
+      c.width = c.height = Math.round(size * k);
+      c.getContext("2d")!.drawImage(src, (cx - size / 2) * k, (cy - size / 2) * k, size * k, size * k, 0, 0, c.width, c.height);
+      return c.toDataURL("image/png");
+    },
     screen: (x: number, y: number) => { const p = view.toScreen(x, y); return { x: p.x, y: p.y }; },
     aim: () => ({ x: aim.x, y: aim.y }),
     rack: (s: number) => { balls = rack8(s); resetViews(); guideDirty = true; },

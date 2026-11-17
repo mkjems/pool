@@ -165,13 +165,14 @@ float ballShadow(vec3 p) {
 /** A pocket's opening seen from above: a capsule from the hole's centre a little way out into the rail. */
 interface Opening { ax: number; ay: number; bx: number; by: number; r: number }
 
-const OPENINGS: Opening[] = TABLE.pockets.map((p) => {
-  if (p.kind === "side") return { ax: p.hx, ay: p.hy, bx: p.hx + p.ux * 0.008, by: p.hy + p.uy * 0.008, r: p.hr };
-  // Corners: nearly round, wide enough to meet both noses at the mouth and to reach past the rail's inner
-  // corner, so the opening cuts into the metal cap.
-  const at = (d: number) => [p.mx + p.ux * d, p.my + p.uy * d];
-  const [ax, ay] = at(0.05), [bx, by] = at(0.06);
-  return { ax, ay, bx, by, r: 0.077 };
+export const OPENINGS: Opening[] = TABLE.pockets.map((p) => {
+  // The near edge is the drop line of the physics: the ball rolls on cloth (the pocket's shelf) until its centre
+  // passes the edge, which is where the physics lets it go, so it tips over the lip at that moment. A capsule
+  // across the mouth, as wide as the mouth; the corners reach past the rail's inner corner, cutting into the cap.
+  const r = p.kind === "corner" ? 0.06 : 0.047, half = p.kind === "corner" ? 0.01 : 0.02;
+  const d = p.drop + r;
+  const cx = p.mx + p.ux * d, cy = p.my + p.uy * d;
+  return { ax: cx - p.uy * half, ay: cy + p.ux * half, bx: cx + p.uy * half, by: cy - p.ux * half, r };
 });
 
 /** A circle around a pocket's opening (for the called-pocket ring). */

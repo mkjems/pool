@@ -57,8 +57,11 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
 **Sound, done 17 November, to judge by ear:** every sound rebuilt (`src/audio/sound.ts`), each event heard at
 its own moment in the simulation, a volume button, room sound in the menu, vibration on Android. See phase 5.
 
-**Next steps, in order unless the user says otherwise:** the user's verdict on the sounds (phase 5: they may
-still bring recordings), the cinematic break and replay (phase 6), friend matches
+**Pocket drops, done 17 November, to judge:** a potted ball now falls in 3D (`src/render/pocketfall.ts`), see
+phase 6. The user found the old slide-and-shrink "very bad" and asked for realism.
+
+**Next steps, in order unless the user says otherwise:** the user's verdict on the pocket drops; the sounds are
+"fine for now" (they will look for recordings later); then the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
 swallowed all input and the code-driven tests did not notice), characters for the computer, and banks and
@@ -70,7 +73,11 @@ browser, and drive it through `window.__pool` (`start('cpu' | 'pass' | 'practice
 `page.mouse` events when testing input. Frame time: count 60 `requestAnimationFrame` intervals and take the
 median; the user's window is about 2560 × 1300 CSS pixels at device pixel ratio 2. If the Playwright
 browser is locked by another session, a Node script importing `playwright` (it is in the npx cache) and
-launching headless Chromium works too: WebGL renders, and the frame timing matched.
+launching headless Chromium works too: WebGL renders, and the frame timing matched. Launch it with
+`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`, or it renders in software at seconds per frame. For
+frame-by-frame looks at fast things: `__pool.timeScale(0)` freezes the game, `__pool.step(seconds)` advances
+it, `__pool.snap(x, y, size)` renders and returns a crop as a PNG data URL (much faster than a screenshot),
+`__pool.falls()` lists balls falling into pockets.
 
 How to keep this plan up to date:
 
@@ -499,6 +506,14 @@ Sizes are relative: S, M, L.
       Rails and caps (17 November): the pocket openings (`OPENINGS` in `src/render/table.ts`) are drawn only,
       not physics; bed, wood, caps and cups are all cut from them. Flat metal seen from straight above mirrors
       the overhead light and goes white: its direct reflection is scaled down in the shader (`direct`).
+      Pocket drops (17 November): the physics hands over the ball's position, velocity and spin (new fields on
+      the pocket event) and `Fall` plays it out in 3D at 2000 steps a second with gravity, restitution and
+      friction with spin: the lip of the bed, the jaws, and the facing under the rail, which leans in over
+      the hole so a fast ball riding up it is turned down (vertical, the topspin carried fast balls up and
+      out onto the table). The ball darkens with depth below the cloth (ball shader). The openings' near edge
+      is the physics' drop line, so a ball rolls on the pocket's cloth shelf and tips over the lip exactly
+      when the physics lets it go. A shot ends only when every fall is over. Measured: slow balls tip in and
+      vanish in ~0.28 s, medium ones tap the back and drop in ~0.2 s, fast ones are driven down in ~0.11 s.
 - [ ] Cinematic break, replay of the last shot, the winning shot.
 - [ ] Start screen, settings, the game's own name and identity.
 

@@ -24,7 +24,8 @@ export interface Ball {
 export type SimEvent =
   | { t: number; type: "ball"; a: number; b: number; speed: number }
   | { t: number; type: "cushion"; a: number; speed: number; x: number; y: number }
-  | { t: number; type: "pocket"; a: number; pocket: number; speed: number }
+  /** vx..wz: the ball's motion as it dropped (for drawing the fall; the ball is off the table after this). */
+  | { t: number; type: "pocket"; a: number; pocket: number; speed: number; vx: number; vy: number; wx: number; wy: number; wz: number }
   | { t: number; type: "cue"; a: number; speed: number; miscue: boolean };
 
 export interface Shot {
@@ -349,9 +350,10 @@ export class Sim {
       const p = pocketAt(b.x, b.y);
       if (p < 0) continue;
       const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+      const { vx, vy, wx, wy, wz } = b;
       b.on = false;
       b.vx = 0; b.vy = 0; b.wx = 0; b.wy = 0; b.wz = 0;
-      this.emit({ t: this.t, type: "pocket", a: b.id, pocket: p, speed });
+      this.emit({ t: this.t, type: "pocket", a: b.id, pocket: p, speed, vx, vy, wx, wy, wz });
     }
   }
 
