@@ -94,7 +94,8 @@ float edge(float v, float e) { float w = fwidth(v) * 0.75; return smoothstep(e -
     float s = abs(n.z);
     float spot = edge(s, ${SPOT_COS.toFixed(4)});
     vec2 uv = vec2(n.x * sign(n.z), n.y) / ${SPOT_SIN.toFixed(4)} * 0.5 + 0.5;
-    vec2 auv = (uCell + vec2(uv.x, 1.0 - uv.y)) / 4.0;
+    // The atlas canvas is flipped (row 0 at the top, texture v up): cell (c, r) spans v in [(3-r)/4, (4-r)/4].
+    vec2 auv = vec2(uCell.x + uv.x, 3.0 - uCell.y + uv.y) / 4.0;
     float ink = texture2D(uAtlas, auv).a * spot;
     col = mix(col, white, spot);
     col = mix(col, vec3(0.02), ink);

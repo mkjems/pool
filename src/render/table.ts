@@ -115,19 +115,22 @@ float ballShadow(vec3 p) {
     if (b.w < 0.5) continue;
     float h = p.z;
     vec2 d0 = p.xy - b.xy;
-    if (dot(d0, d0) > 0.04) continue;
-    // Contact shadow right under the ball.
+    if (dot(d0, d0) > 0.01) continue;
+    float lift = max(b.z - h, 0.0);
+    // Contact occlusion: a gentle darkening that hugs the ball where it sits on the cloth.
     float r0 = length(d0);
-    sh *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, ${(R * 1.05).toFixed(5)}, r0)) * step(h, 0.002);
+    sh *= 1.0 - 0.42 * (1.0 - smoothstep(${(R * 0.7).toFixed(5)}, ${(R * 1.5).toFixed(5)}, r0)) * step(h, 0.002);
+    // One shadow per lamp. Each lamp gives only part of the light, so no shadow is black, and a lamp ~0.46 m
+    // wide a metre up blurs the edge by only a few millimetres.
     for (int k = 0; k < 3; k++) {
       vec3 L = uLamps[k];
       float s = (L.z - h) / (L.z - b.z);
       if (s <= 0.0) continue;
       vec2 c = L.xy + (b.xy - L.xy) * s;
       float rr = ${R.toFixed(5)} * s;
-      float pen = ${(R * 0.9).toFixed(5)} + (b.z - h) * 0.45;
+      float pen = 0.0015 + 0.23 * lift / (L.z - b.z);
       float dd = length(p.xy - c);
-      sh *= 1.0 - ${(0.27 * strength).toFixed(3)} * (1.0 - smoothstep(rr - pen * 0.6, rr + pen, dd));
+      sh *= 1.0 - ${(0.23 * strength).toFixed(3)} * (1.0 - smoothstep(rr - pen, rr + pen, dd));
     }
   }
   return sh;
