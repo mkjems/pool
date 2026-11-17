@@ -1,0 +1,465 @@
+// Pool: practice table (phase 2). Aim, shoot, watch the physics; the rules come in phase 3.
+
+import "./style.css";
+import * as THREE from "three";
+import { DT, MAX_SPEED, MAX_TIP, R } from "./sim/constants";
+import { Sim, isMoving, type Ball, type Shot, type SimEvent } from "./sim/physics";
+import { ball, rack8 } from "./sim/rack";
+import { HEAD_X, TABLE, onSurface } from "./sim/table";
+import { makeView, applyEnvironment } from "./render/scene";
+import { makeTable, CLOTHS, type Cloth } from "./render/table";
+import { makeBalls, spin as turnBall } from "./render/balls";
+import { CueView, GuideView, type GuidePath } from "./render/cue";
+import { Sound } from "./audio/sound";
+
+type State = "aim" | "stroke" | "run" | "place";
+type GuideLevel = "full" | "short" | "off";
+
+const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
+const canvas = $<HTMLCanvasElement>("#c");
+const view = makeView(canvas);
+const table = makeTable();
+view.scene.add(table.group);
+const ballViews = makeBalls(table.group);
+const cue = new CueView(table.group);
+const guide = new GuideView(table.group);
+const sound = new Sound();
+applyEnvironment(view);
+
+const store = {
+  get(k: string) { try { return localStorage.getItem("pool." + k); } catch { return null; } },
+  set(k: string, v: string) { try { localStorage.setItem("pool." + k, v); } catch { /* private mode */ } },
+};
+
+// ------------------------------------------------------------------ game state
+
+let seed = (Math.random() * 1e9) | 0;
+let balls: Ball[] = rack8(seed);
+let sim: Sim | null = null;
+let state: State = "aim";
+let aim = new THREE.Vector2(1, 0);
+let power = 0; // 0-1 while pulling back
+let tip = { side: 0, height: 0 };
+let guideLevel: GuideLevel = (store.get("guide") as GuideLevel) ?? "full";
+let cloth: Cloth = (store.get("cloth") as Cloth) ?? "green";
+let strokeT = 0;
+let pendingShot: Shot | null = null;
+let acc = 0;
+let guideDirty = true;
+let afterShotTimer = 0;
+table.setCloth(cloth);
+
+const shotSpeed = (p: number) => MAX_SPEED * Math.pow(p, 1.6);
+
+function newRack() {
+  seed = (Math.random() * 1e9) | 0;
+  balls = rack8(seed);
+  sim = null;
+  state = "aim";
+  aim.set(1, 0);
+  tip = { side: 0, height: 0 };
+  for (const v of ballViews) { v.drop = -1; v.mesh.visible = true; v.mesh.scale.setScalar(1); }
+  updateSpinUI();
+  guideDirty = true;
+}
+
+function shoot(p: number) {
+  if (state !== "aim" || p < 0.015) return;
+  sound.unlock();
+  pendingShot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height };
+  state = "stroke";
+  strokeT = 0;
+  guide.hide();
+}
+
+function onEvent(e: SimEvent) {
+  const b = (id: number) => balls.find((x) => x.id === id) ?? sim!.balls.find((x) => x.id === id)!;
+  switch (e.type) {
+    case "ball": sound.ball(e.speed, sim!.balls[e.a].x); break;
+    case "cushion": sound.cushion(e.speed, e.x); break;
+    case "cue": sound.cue(e.speed, e.miscue); if (e.miscue) toast("Miscue"); break;
+    case "pocket": {
+      sound.pocket(e.speed, b(e.a).x);
+      const v = ballViews[e.a];
+      const p = TABLE.pockets[e.pocket];
+      v.drop = 0;
+      v.dropFrom.copy(v.mesh.position);
+      v.dropTo.set(p.hx, p.hy, -0.05);
+      break;
+    }
+  }
+}
+
+function endOfShot() {
+  balls = sim!.balls;
+  sim = null;
+  const cueBall = balls[0];
+  if (!cueBall.on) {
+    toast("Scratch: place the cue ball behind the line");
+    cueBall.on = true; cueBall.x = HEAD_X - 0.1; cueBall.y = 0;
+    cueBall.vx = cueBall.vy = cueBall.wx = cueBall.wy = cueBall.wz = 0;
+    freeSpot(cueBall);
+    ballViews[0].drop = -1; ballViews[0].mesh.visible = true; ballViews[0].mesh.scale.setScalar(1);
+    state = "place";
+  } else state = "aim";
+  if (balls.slice(1).every((b) => !b.on)) { toast("Table cleared!"); afterShotTimer = 1.6; }
+  tip = { side: 0, height: 0 };
+  updateSpinUI();
+  guideDirty = true;
+}
+
+/** Nudge a ball until it overlaps nothing. */
+function freeSpot(b: Ball) {
+  for (let k = 0; k < 400; k++) {
+    if (balls.every((o) => o === b || !o.on || (o.x - b.x) ** 2 + (o.y - b.y) ** 2 >= 4 * R * R) && onSurface(b.x, b.y)) return;
+    b.x = HEAD_X - 0.05 - Math.random() * 0.35; b.y = (Math.random() - 0.5) * 0.8;
+  }
+}
+
+function placeCueAt(p: THREE.Vector2) {
+  const b = balls[0];
+  const x = Math.min(HEAD_X, Math.max(-0.99 + R, p.x)), y = Math.max(-0.495 + R, Math.min(0.495 - R, p.y));
+  const ok = balls.every((o) => o === b || !o.on || (o.x - x) ** 2 + (o.y - y) ** 2 >= 4 * R * R);
+  if (ok) { b.x = x; b.y = y; guideDirty = true; }
+}
+
+// ------------------------------------------------------------------ aim guide
+
+function computeGuide() {
+  guideDirty = false;
+  if (state !== "aim" || guideLevel === "off") { guide.hide(); return; }
+  const s = new Sim(balls);
+  const p = power > 0.015 ? power : 0.42;
+  s.strike({ dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height });
+  s.events = [];
+  const cuePath: THREE.Vector2[] = [new THREE.Vector2(balls[0].x, balls[0].y)];
+  let objPath: THREE.Vector2[] = [];
+  let first = -1;
+  let ghost: THREE.Vector2 | null = null;
+  let cueAfter = 0, objCushions = 0, cueCushions = 0;
+  const maxCueAfter = guideLevel === "full" ? 0.45 : 0.1;
+  const maxObj = guideLevel === "full" ? 1.6 : 0.3;
+  let objLen = 0;
+  for (let i = 0; i < 4000 && s.moving(); i++) {
+    const before = s.events.length;
+    s.step();
+    for (const e of s.events.slice(before)) {
+      if (e.type === "ball" && first < 0 && (e.a === 0 || e.b === 0)) {
+        first = e.a === 0 ? e.b : e.a;
+        ghost = new THREE.Vector2(s.balls[0].x, s.balls[0].y);
+        objPath = [new THREE.Vector2(s.balls[first].x, s.balls[first].y)];
+      }
+      if (e.type === "cushion" && e.a === 0) cueCushions++;
+      if (e.type === "cushion" && e.a === first) objCushions++;
+    }
+    const c = s.balls[0];
+    const lastC = cuePath[cuePath.length - 1];
+    const done = cueAfter >= maxCueAfter || cueCushions > (guideLevel === "full" ? 1 : 0) || !c.on;
+    if (!done && c.on) {
+      const d = Math.hypot(c.x - lastC.x, c.y - lastC.y);
+      if (d > 0.004) { cuePath.push(new THREE.Vector2(c.x, c.y)); if (first >= 0) cueAfter += d; }
+    }
+    if (first >= 0) {
+      const o = s.balls[first];
+      const lastO = objPath[objPath.length - 1];
+      if (o.on && objLen < maxObj && objCushions < (guideLevel === "full" ? 2 : 1)) {
+        const d = Math.hypot(o.x - lastO.x, o.y - lastO.y);
+        if (d > 0.004) { objPath.push(new THREE.Vector2(o.x, o.y)); objLen += d; }
+      } else if (!o.on && lastO) {
+        const pk = s.events.find((e) => e.type === "pocket" && e.a === first);
+        if (pk && pk.type === "pocket") {
+          const P = TABLE.pockets[pk.pocket];
+          if (Math.hypot(lastO.x - P.hx, lastO.y - P.hy) > 0.01) objPath.push(new THREE.Vector2(P.hx, P.hy));
+        }
+        objLen = maxObj;
+      }
+    }
+    if (done && (first < 0 ? true : objLen >= maxObj || objCushions >= 2 || !s.balls[first].on)) break;
+    if (first < 0 && cuePath.length > 2 && done) break;
+  }
+  if (first < 0 && cuePath.length) {
+    // No ball hit: show where the cue ball goes (up to the cushion).
+  }
+  const paths: GuidePath[] = [{ points: cuePath, color: 0xffffff, width: 0.0035, opacity: 0.55 }];
+  if (objPath.length > 1) paths.push({ points: objPath, color: 0xffe7a3, width: 0.0045, opacity: 0.75 });
+  guide.set(paths, ghost);
+}
+
+// ------------------------------------------------------------------ input
+
+const power$ = $("#power"), fill$ = $("#power .fill"), knob$ = $("#power .knob");
+function setPowerUI(p: number) {
+  fill$.style.height = `${p * 100}%`;
+  knob$.style.top = `${p * 100}%`;
+}
+
+let mouseDown: { x: number; y: number } | null = null;
+let touch: { x: number; y: number; t: number; moved: number } | null = null;
+let fine = false;
+
+function cueScreen() { return view.toScreen(balls[0].x, balls[0].y); }
+
+function aimAt(px: number, py: number) {
+  const p = view.toTable(px, py);
+  if (!p) return;
+  const d = p.sub(new THREE.Vector2(balls[0].x, balls[0].y));
+  if (d.lengthSq() < 1e-6) return;
+  aim.copy(d.normalize());
+  guideDirty = true;
+}
+
+function rotateAim(rad: number) {
+  aim.rotateAround(new THREE.Vector2(), rad);
+  aim.normalize();
+  guideDirty = true;
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  sound.unlock();
+  canvas.setPointerCapture(e.pointerId);
+  if (state === "place") { placeCueAt(view.toTable(e.clientX, e.clientY) ?? new THREE.Vector2(-9, 0)); return; }
+  if (state !== "aim") return;
+  if (e.pointerType === "mouse") {
+    if (e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
+    mouseDown = { x: e.clientX, y: e.clientY };
+  } else {
+    touch = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
+  }
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (state === "place") {
+    if (e.pointerType === "mouse" || e.buttons) placeCueAt(view.toTable(e.clientX, e.clientY) ?? new THREE.Vector2(-9, 0));
+    return;
+  }
+  if (state !== "aim") return;
+  if (e.pointerType === "mouse") {
+    if (mouseDown) {
+      // Pull back: distance moved away from the target, in screen space.
+      const c = cueScreen();
+      const ahead = view.toScreen(balls[0].x + aim.x * 0.1, balls[0].y + aim.y * 0.1).sub(c).normalize();
+      const pulled = -((e.clientX - mouseDown.x) * ahead.x + (e.clientY - mouseDown.y) * ahead.y);
+      power = Math.max(0, Math.min(1, pulled / (0.3 * Math.min(innerWidth, innerHeight))));
+      setPowerUI(power);
+      guideDirty = true;
+    } else if (fine || e.shiftKey) {
+      // Fine aim: a tenth of the pointer's sweep around the cue ball.
+      const c = cueScreen();
+      const a0 = Math.atan2(e.clientY - e.movementY - c.y, e.clientX - e.movementX - c.x);
+      const a1 = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+      let da = a1 - a0;
+      if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+      rotateAim(-da * 0.1 * (view.portrait ? 1 : 1));
+    } else aimAt(e.clientX, e.clientY);
+  } else if (touch) {
+    // Relative aim: the finger's movement across the aim line turns it; slow movement turns finer.
+    const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+    const now = performance.now();
+    const dt = Math.max(1, now - touch.t);
+    const speed = Math.hypot(dx, dy) / dt; // px per ms
+    const gain = Math.max(0.12, Math.min(1, speed / 1.2));
+    const c = cueScreen();
+    const ahead = view.toScreen(balls[0].x + aim.x * 0.1, balls[0].y + aim.y * 0.1).sub(c).normalize();
+    // Perpendicular to the aim on screen, pointing to its right.
+    const across = dx * -ahead.y + dy * ahead.x;
+    // Which way is "turn right" on screen depends on the view; measure it.
+    const probe = view.toScreen(balls[0].x + (aim.x * 0.1 - aim.y * 0.01), balls[0].y + (aim.y * 0.1 + aim.x * 0.01)).sub(c);
+    const ccwIsRight = probe.x * -ahead.y + probe.y * ahead.x > 0 ? 1 : -1;
+    rotateAim(across * gain * 0.0035 * ccwIsRight);
+    touch.moved += Math.hypot(dx, dy);
+    touch.x = e.clientX; touch.y = e.clientY; touch.t = now;
+  }
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  if (state === "place") {
+    if (e.pointerType === "mouse" || (touch?.moved ?? 0) < 8) { state = "aim"; guideDirty = true; }
+    return;
+  }
+  if (e.pointerType === "mouse") {
+    if (mouseDown) { mouseDown = null; const p = power; power = 0; setPowerUI(0); shoot(p); }
+  } else if (touch) {
+    if (touch.moved < 6) aimAt(e.clientX, e.clientY); // a tap aims straight at that point
+    touch = null;
+  }
+});
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("wheel", (e) => { if (state === "aim") { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
+
+// Power slider: pull down, release to shoot; back to the top cancels.
+power$.addEventListener("pointerdown", (e) => {
+  if (state !== "aim") return;
+  sound.unlock();
+  power$.setPointerCapture(e.pointerId);
+  const set = (y: number) => {
+    const r = power$.getBoundingClientRect();
+    power = Math.max(0, Math.min(1, (y - r.top) / r.height));
+    setPowerUI(power);
+    guideDirty = true;
+  };
+  set(e.clientY);
+  const move = (ev: PointerEvent) => set(ev.clientY);
+  const up = () => {
+    power$.removeEventListener("pointermove", move);
+    power$.removeEventListener("pointerup", up);
+    power$.removeEventListener("pointercancel", up);
+    const p = power; power = 0; setPowerUI(0); shoot(p);
+  };
+  power$.addEventListener("pointermove", move);
+  power$.addEventListener("pointerup", up);
+  power$.addEventListener("pointercancel", up);
+});
+
+// Spin.
+const spinBtn = $("#spin"), spinPad = $("#spin-pad"), pad = $("#spin-pad .pad");
+function updateSpinUI() {
+  for (const dot of [spinBtn.querySelector<HTMLElement>(".dot")!, pad.querySelector<HTMLElement>(".dot")!]) {
+    dot.style.left = `${50 + tip.side * 50}%`;
+    dot.style.top = `${50 - tip.height * 50}%`;
+  }
+}
+function setTip(side: number, height: number) {
+  const l = Math.hypot(side, height), max = MAX_TIP * 0.98;
+  if (l > max) { side *= max / l; height *= max / l; }
+  tip = { side, height };
+  updateSpinUI();
+  guideDirty = true;
+}
+spinBtn.addEventListener("click", () => { spinPad.hidden = false; });
+$("#spin-done").addEventListener("click", () => { spinPad.hidden = true; });
+$("#spin-reset").addEventListener("click", () => setTip(0, 0));
+spinPad.addEventListener("pointerdown", (e) => { if (e.target === spinPad) spinPad.hidden = true; });
+pad.addEventListener("pointerdown", (e) => {
+  pad.setPointerCapture(e.pointerId);
+  const set = (ev: PointerEvent) => {
+    const r = pad.getBoundingClientRect();
+    setTip(((ev.clientX - r.left) / r.width - 0.5) * 2, -((ev.clientY - r.top) / r.height - 0.5) * 2);
+  };
+  set(e);
+  pad.onpointermove = (ev) => { if (ev.buttons) set(ev); };
+});
+
+// Buttons and keys.
+const guideBtn = $("#b-guide"), soundBtn = $("#b-sound");
+function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
+setGuide(guideLevel);
+function cycleCloth() {
+  const keys = Object.keys(CLOTHS) as Cloth[];
+  cloth = keys[(keys.indexOf(cloth) + 1) % keys.length];
+  table.setCloth(cloth); store.set("cloth", cloth); toast(`Cloth: ${cloth}`);
+}
+function toggleSound() { sound.unlock(); sound.setMuted(!sound.muted); soundBtn.textContent = sound.muted ? "Sound off" : "Sound on"; store.set("muted", sound.muted ? "1" : "0"); }
+if (store.get("muted") === "1") { sound.setMuted(true); soundBtn.textContent = "Sound off"; }
+$("#b-rack").addEventListener("click", newRack);
+guideBtn.addEventListener("click", () => setGuide(guideLevel === "full" ? "short" : guideLevel === "short" ? "off" : "full"));
+$("#b-cloth").addEventListener("click", cycleCloth);
+soundBtn.addEventListener("click", toggleSound);
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Shift") fine = true;
+  const k = e.key.toLowerCase();
+  if (k === "r") newRack();
+  else if (k === "g") guideBtn.click();
+  else if (k === "c") cycleCloth();
+  else if (k === "m") toggleSound();
+  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; }
+  else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
+  else if (k === "w") setTip(tip.side, tip.height + 0.1);
+  else if (k === "s") setTip(tip.side, tip.height - 0.1);
+  else if (k === "a") setTip(tip.side - 0.1, tip.height);
+  else if (k === "d") setTip(tip.side + 0.1, tip.height);
+});
+window.addEventListener("keyup", (e) => { if (e.key === "Shift") fine = false; });
+window.addEventListener("resize", () => { view.resize(); guideDirty = true; });
+
+let toastTimer = 0;
+function toast(msg: string) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+// ------------------------------------------------------------------ frame loop
+
+let last = performance.now();
+function frame(now: number) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (state === "stroke" && pendingShot) {
+    // The cue swings forward from where it was pulled to, then strikes.
+    strokeT += dt;
+    if (strokeT >= 0.07) {
+      sim = new Sim(balls);
+      sim.onEvent = onEvent;
+      sim.strike(pendingShot);
+      pendingShot = null;
+      state = "run";
+      acc = 0;
+    }
+  }
+  if (state === "run" && sim) {
+    acc += dt;
+    let n = 0;
+    while (acc >= DT && n < 80) {
+      sim.step();
+      for (const b of sim.balls) if (b.on) turnBall(ballViews[b.id].mesh, b.wx, b.wy, b.wz, DT);
+      acc -= DT; n++;
+    }
+    if (!sim.moving()) endOfShot();
+  }
+  if (afterShotTimer > 0) { afterShotTimer -= dt; if (afterShotTimer <= 0) newRack(); }
+
+  const cur = sim ? sim.balls : balls;
+  let rolling = 0;
+  for (const b of cur) {
+    const v = ballViews[b.id];
+    if (b.on) {
+      v.mesh.visible = true;
+      v.mesh.position.set(b.x, b.y, R);
+      table.shadowBalls[b.id].set(b.x, b.y, R, 1);
+      if (isMoving(b)) rolling += Math.hypot(b.vx, b.vy);
+    } else if (v.drop >= 0) {
+      // Into the pocket: slide to the hole and sink.
+      v.drop += dt;
+      const k = Math.min(1, v.drop / 0.28);
+      v.mesh.position.lerpVectors(v.dropFrom, v.dropTo, k * k);
+      table.shadowBalls[b.id].set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z, v.mesh.position.z > 0 ? 1 : 0);
+      if (k >= 1) { v.drop = -1; v.mesh.visible = false; }
+    } else {
+      v.mesh.visible = false;
+      table.shadowBalls[b.id].w = 0;
+    }
+  }
+  sound.rolling(rolling);
+
+  if (state === "aim" && guideDirty) computeGuide();
+  if (state !== "aim") guide.hide();
+  const showCue = state === "aim" || state === "stroke";
+  const pull = state === "stroke" ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25) : 0.03 + power * 0.25;
+  cue.set(balls[0].x, balls[0].y, aim.x, aim.y, pull, tip.side, tip.height, showCue && balls[0].on);
+
+  view.renderer.render(view.scene, view.camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Test hook for the browser tests and screenshots: ?test
+if (new URLSearchParams(location.search).has("test")) {
+  (window as unknown as Record<string, unknown>).__pool = {
+    state: () => state,
+    balls: () => (sim ? sim.balls : balls).map((b) => ({ ...b })),
+    aimAt: (x: number, y: number) => { const d = new THREE.Vector2(x - balls[0].x, y - balls[0].y).normalize(); aim.copy(d); guideDirty = true; },
+    setTip,
+    shoot: (p: number) => shoot(p),
+    rack: (s: number) => { newRack(); seed = s; balls = rack8(s); },
+    place: (list: Array<[number, number, number]>) => {
+      balls = Array.from({ length: 16 }, (_, id) => { const b = ball(id, 0, 0); b.on = false; return b; });
+      for (const [id, x, y] of list) { balls[id].on = true; balls[id].x = x; balls[id].y = y; }
+      for (const v of ballViews) v.drop = -1;
+      guideDirty = true;
+    },
+  };
+}

@@ -5,7 +5,7 @@
 // matters for finding contacts, and those are found at their exact moment inside each step.
 
 import {
-  DT, E_BALL, EPS_V, EPS_W, G, MASS, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE,
+  DT, E_BALL, EPS_V, EPS_W, G, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE,
   CUSHION_COS, CUSHION_SIN, R, SPIN_DECEL, SQUIRT, eCushion, muBall,
 } from "./constants";
 import { TABLE, pocketAt, type Segment, type Point } from "./table";

@@ -4,7 +4,8 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 Nothing is built yet. The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 0. The open questions were answered on 17 November 2026 (see [Answers](#answers)).
+**Current phase:** 1 and 2 together. Phase 0 is done except trying Experiment A on your own phone. A practice
+table runs with `npm run dev`: aim, shoot, spin, sounds, no rules yet (17 November 2026).
 
 How to keep this plan up to date:
 
@@ -325,30 +326,43 @@ Sizes are relative: S, M, L.
 
 ### Phase 0: decisions and two experiments (S)
 
-- [ ] Answer the [open questions](#open-questions).
-- [ ] `git init`, repository `mkjems/pool`, Vite, TypeScript, Vitest, a `CLAUDE.md` with the working rules.
+- [x] Answer the [open questions](#open-questions).
+- [x] `git init`, Vite, TypeScript, Vitest, a `CLAUDE.md` with the working rules. (GitHub repository `mkjems/pool`
+      not created yet: ask first.)
 - [ ] Experiment A: a bare 3D table with 16 balls, opened on your phone and your desktop. Measure frame
       rate. Judge ball size and whether stripes read.
-- [ ] Experiment B: one ball sliding into rolling and one collision, run in Node and in `jsc`, compared bit
+      Grew into the practice table. Ball diameter on screen: about 30 px at 1440 × 900, 18 px on a phone
+      held upright (390 × 844), 17 px held sideways. Still open: frame rate and readability on your phone.
+- [x] Experiment B: one ball sliding into rolling and one collision, run in Node and in `jsc`, compared bit
       for bit.
+      Went further: the whole physics, 40 breaks plus 160 random shots with spin, identical in V8 and
+      JavaScriptCore (`npm run engines`). A break simulates in 2.5 ms on a laptop (`npm run bench`) and pots
+      1.1 balls on average at 8.5 m/s, as real breaks do.
 
 **Exit:** the decisions above are confirmed or changed, with numbers from both experiments.
 
 ### Phase 1: physics (L)
 
-- [ ] Ball motion: sliding, rolling, spinning, still.
-- [ ] Ball against ball with friction. Ball against cushion. Pocket jaws and drops.
-- [ ] The cue strike: speed, spin, squirt, miscue.
-- [ ] `shoot()` with its event list. Reference-shot tests. Determinism test.
-- [ ] A plain 2D debug view to watch shots.
+- [x] Ball motion: sliding, rolling, spinning, still.
+      Integrated exactly per state between contacts; the step (1/400 s) only matters for finding contacts.
+- [x] Ball against ball with friction. Ball against cushion. Pocket jaws and drops.
+      Reverse english barely changes a cushion angle (friction saturates); running english works. Tune by feel.
+- [x] The cue strike: speed, spin, squirt, miscue.
+- [x] `shoot()` with its event list. Reference-shot tests. Determinism test.
+      As `Sim.strike()` and `Sim.step()`/`run()`. Tests: stun, 90° rule, throw, 30° rule, draw, follow,
+      cushions, side spin, pots, energy, determinism (`tests/physics.test.ts`).
+- [ ] ~~A plain 2D debug view to watch shots.~~ Not needed: the 3D table came early and shows the shots.
 
 **Exit:** the reference shots pass, Node and `jsc` agree, a full break runs in a few milliseconds.
 
 ### Phase 2: the table on screen, and shooting (L)
 
-- [ ] 3D table, balls, cue, exact shadows, camera fitting any window, portrait and landscape.
+- [x] 3D table, balls, cue, exact shadows, camera fitting any window, portrait and landscape.
 - [ ] Mouse and touch controls, power, spin picker, loupe, aim guide.
+      Done except the loupe. The guide plays the shot on the real physics. On a phone held upright the power
+      bar overlaps the right cushion: to judge on a real phone.
 - [ ] Readable balls: band width, palette, the measurement from many angles.
+      Band and palette done (patterns drawn in the shader, sharp at any size); measurement not yet.
 - [ ] Deploy to `pool.mkjems.dk`, not linked from anywhere, so it can be tried on real phones.
 
 **Exit:** you can knock balls around on your phone and your desktop, and aiming feels precise on both.
@@ -372,6 +386,7 @@ Sizes are relative: S, M, L.
 ### Phase 5: sound (M)
 
 - [ ] Find or record samples. Wire events to sounds by impulse and position.
+      Synthetic sounds are wired (ball, cushion, pocket, cue tip, rolling, room reverb); samples later.
 - [ ] Rolling sound, reverb, room tone, vibration, volume settings.
 
 **Exit:** you say it sounds like a pool table.

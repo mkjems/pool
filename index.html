@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#060607" />
+  <title>Pool</title>
+  <meta name="description" content="8-ball pool in the browser with real physics. Play the computer or a friend. No ads, no sign-up." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <canvas id="c" aria-label="Pool table"></canvas>
+  <div id="hud">
+    <header class="bar">
+      <a class="brand" href="https://mkjems.dk/" title="More games at mkjems.dk">Pool</a>
+      <nav>
+        <button id="b-rack" title="New rack (R)">New rack</button>
+        <button id="b-guide" title="Aim guide (G)">Guide: full</button>
+        <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
+        <button id="b-sound" title="Sound (M)">Sound on</button>
+      </nav>
+    </header>
+    <div id="power" class="power" aria-label="Power: drag down and release to shoot">
+      <div class="track"><div class="fill"></div><div class="knob"></div></div>
+    </div>
+    <button id="spin" class="spin" title="Spin: where the tip strikes (W A S D)"><span class="dot"></span></button>
+    <div id="spin-pad" class="spin-pad" hidden>
+      <div class="pad"><span class="dot"></span><span class="cross"></span></div>
+      <p>Drag to set where the tip strikes</p>
+      <div class="row"><button id="spin-reset">Centre</button><button id="spin-done">Done</button></div>
+    </div>
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
