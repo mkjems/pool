@@ -4,8 +4,8 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 5, sound: new synthetic sounds done (17 November), waiting on your ears; see
-[Next session](#next-session). Phase 6's rails and metal caps are done and liked. Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
+**Current phase:** 7, friend matches: working locally (17 November), not yet tried by the user, not deployed.
+See [Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
 ## Next session
@@ -64,7 +64,20 @@ phase 6. The user found the old slide-and-shrink "very bad" and asked for realis
 into a pocket can be thrown back out by the back of the pocket. In the physics, so the rules and the computer
 know. See phase 1.
 
-**Next steps, in order unless the user says otherwise:** the user's verdict on the rejections; the sounds are
+**Friend matches, built 17 November evening (phase 7), to pick up first.** The user stopped for the night;
+nothing is pushed or deployed. What works, tested: `server/relay.mjs` (rooms by 4-character code, seats with
+rejoin keys, keeps the match's start and latest shot; in Vite dev and preview through a plugin in
+`vite.config.ts`, in production through `server/server.mjs`, `npm run serve`), `src/net/net.ts` (reconnects,
+rejoins, keep-alive, remembers the seat for reloads), and the online mode in `src/main.ts`: menu (name, "Play a
+friend online", join by code), invite card (link, copy, share), live aiming, shots carrying the shooter's exact
+position and game, re-rack and cue respawn seeded alike, "away" banner, leave, rematch. `tests/relay.test.ts`;
+two-browser runs through the dev server (pair, 6 shots identical on both sides, reload mid-match, rematch,
+dropout banner, leave) all passed. Left to do: the user trying it on two devices; emotes and an optional shot
+clock; a committed browser test for matches (the scratch scripts were `match.mjs` and `flows.mjs`: two
+Playwright contexts on `?test`, driving `__pool`); then deploying (phase 8, ask first: GitHub repository,
+Dockerfile, the VPS).
+
+**Next steps, in order unless the user says otherwise:** finish friend matches (above); the sounds are
 "fine for now" (they will look for recordings later); then the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
@@ -532,8 +545,11 @@ Sizes are relative: S, M, L.
 
 ### Phase 7: friend matches (M)
 
-- [ ] The relay, invite link and code, handshake with version check.
-- [ ] Live aiming, shots, checksum, rejoin after a dropout.
+- [x] The relay, invite link and code, handshake with version check.
+      `server/relay.mjs`. Versions: the build time (`__BUILD__`); the older browser reloads and rejoins.
+- [x] Live aiming, shots, checksum, rejoin after a dropout.
+      Each shot carries the shooter's exact balls and game before it, so the two can never drift apart; the
+      watcher warns in the console if its own position differed (a determinism bug). Tested locally only.
 - [ ] Bot matches through a rough connection. Emotes, optional shot clock.
 
 **Exit:** you play a whole match against someone on another network, including a dropped connection.

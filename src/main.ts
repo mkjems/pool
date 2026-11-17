@@ -1,10 +1,11 @@
-// Pool: the frame loop, input, and the game around the table (practice, or two players on one device).
+// Pool: the frame loop, input, and the game around the table: practice, two players on one device, the
+// computer, or a friend online (src/net/net.ts).
 
 import "./style.css";
 import * as THREE from "three";
 import { DT, G, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
-import { Sim, type Ball, type Shot, type SimEvent } from "./sim/physics";
-import { ball, rack8 } from "./sim/rack";
+import { Sim, cloneBalls, fingerprint, type Ball, type Shot, type SimEvent } from "./sim/physics";
+import { ball, rack8, rng } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
 import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
@@ -15,9 +16,10 @@ import { CueView, GuideView, type GuidePath } from "./render/cue";
 import { Markers } from "./render/markers";
 import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
+import { Link, savedSeat, type AimMsg, type FromRelay, type ShotMsg, type Start } from "./net/net";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over";
-type Mode = "practice" | "pass" | "cpu";
+type Mode = "practice" | "pass" | "cpu" | "online";
 type GuideLevel = "full" | "short" | "off";
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -73,6 +75,8 @@ let names = ["Player 1", "Player 2"];
 const ruled = () => mode !== "practice";
 /** The computer is to play: the human may only watch. */
 const cpuTurn = () => mode === "cpu" && game.turn === 1 && game.winner === null;
+/** The other side is to play (the computer, or the friend online): this browser's player only watches. */
+const watching = () => game.winner === null && ((mode === "cpu" && game.turn === 1) || (mode === "online" && game.turn !== seat));
 
 // ------------------------------------------------------------------ the computer opponent
 
@@ -140,6 +144,220 @@ function runCpu(dt: number) {
     shootExact(played);
   }
 }
+// ------------------------------------------------------------------ friend matches (online)
+
+let link: Link | null = null;
+/** This browser's player: 0 hosted the match, 1 joined it. */
+let seat: Player = 0;
+let match: Start | null = null;
+/** Shots played in this match; the friend's shots arrive numbered. */
+let shotNo = 0;
+let friendHere = false;
+/** The friend's shots, played in turn once the table is still. */
+const remoteShots: ShotMsg[] = [];
+let remoteAim: AimMsg | null = null;
+let aimSent = { at: -1, key: "" };
+let myLastShot: ShotMsg | null = null;
+let myName = store.get("name") ?? "";
+
+function netBanner(msg: string | null) {
+  const b = $("#net");
+  b.textContent = msg ?? "";
+  b.hidden = !msg;
+}
+const friendName = () => names[1 - seat];
+const awayBanner = () => netBanner(match && !friendHere ? `${friendName()} is away. Waiting for them to come back…` : null);
+
+function setOnlineNames(n: [string, string]) {
+  names = seat === 0 ? ["You", n[1] || "Your friend"] : [n[0] || "Your friend", "You"];
+  document.querySelectorAll<HTMLElement>(".score .name").forEach((el, i) => { el.textContent = names[i]; });
+}
+
+function connect(l: Link) {
+  link?.end();
+  link = l;
+  l.onMessage = onNet;
+  l.onStatus = (s) => { if (s === "down") netBanner("Connection lost. Reconnecting…"); else if (s === "open") awayBanner(); };
+}
+
+function showInvite(text: string, code: string | null) {
+  $("#menu").hidden = true;
+  $("#invite").hidden = false;
+  $("#invite-text").textContent = text;
+  $("#invite-share").hidden = !code;
+  if (!code) return;
+  const url = `${location.origin}${location.pathname}#${code}`;
+  $<HTMLInputElement>("#invite-link").value = url;
+  $("#invite-code").textContent = code;
+  $("#b-share").hidden = !("share" in navigator);
+}
+
+function hostMatch() {
+  sound.unlock();
+  seat = 0; match = null; friendHere = false;
+  connect(Link.host(myName));
+  showInvite("Setting up the game…", null);
+}
+
+function joinMatch(code: string) {
+  seat = 1; match = null; friendHere = false;
+  connect(Link.join(code, myName));
+  showInvite("Joining your friend's game…", null);
+}
+
+function leaveOnline() {
+  link?.bye();
+  link = null;
+  match = null;
+  friendHere = false;
+  history.replaceState(null, "", location.pathname + location.search);
+  netBanner(null);
+}
+
+/** A new match (the first, or a rematch): its rack seed and breaker go to the friend, and both start it. */
+function newMatch(first: Player) {
+  const m: Start = { id: Math.random().toString(36).slice(2, 10), seed: (Math.random() * 1e9) | 0, breaker: first };
+  link?.send({ t: "start", ...m });
+  beginMatch(m);
+}
+
+function beginMatch(m: Start) {
+  match = m;
+  shotNo = 0;
+  remoteShots.length = 0;
+  remoteAim = null;
+  myLastShot = null;
+  $("#invite").hidden = true;
+  startGame("online", m.breaker, m.seed);
+  awayBanner();
+}
+
+function onNet(m: FromRelay) {
+  switch (m.t) {
+    case "room":
+      seat = m.seat;
+      setOnlineNames(m.names);
+      history.replaceState(null, "", `#${m.code}`); // a reload rejoins
+      if (seat === 0) showInvite("Send your friend this link. The game starts when they open it.", m.code);
+      else showInvite(`Joined ${friendName()}'s game. Starting…`, null);
+      break;
+    case "joined":
+      setOnlineNames(m.names);
+      friendHere = true;
+      toast(`${friendName()} joined`);
+      newMatch(0);
+      break;
+    case "names":
+      setOnlineNames(m.names);
+      break;
+    case "catchup":
+      // Back after a dropout or a reload: carry on from the match's latest shot.
+      seat = m.seat;
+      setOnlineNames(m.names);
+      friendHere = m.present;
+      if (!m.start) { if (seat === 0) showInvite("Send your friend this link. The game starts when they open it.", m.code); break; }
+      if (!match || match.id !== m.start.id) beginMatch(m.start);
+      if (m.last && m.last.id === match!.id && m.last.n > shotNo) remoteShots.push(m.last);
+      // A shot of ours that never reached the relay goes again.
+      if (myLastShot && myLastShot.id === match!.id && (!m.last || m.last.n < myLastShot.n)) link?.send(myLastShot);
+      awayBanner();
+      break;
+    case "start":
+      friendHere = true;
+      beginMatch(m);
+      break;
+    case "shot":
+      if (match && m.id === match.id && m.n > shotNo && !remoteShots.some((r) => r.n === m.n)) remoteShots.push(m);
+      break;
+    case "aim":
+      remoteAim = m;
+      break;
+    case "left":
+      friendHere = false;
+      awayBanner();
+      break;
+    case "back":
+      friendHere = true;
+      awayBanner();
+      toast(`${friendName()} is back`);
+      break;
+    case "gone":
+      friendHere = false;
+      link?.end();
+      link = null;
+      netBanner(null);
+      if (state !== "menu") { state = "over"; showOver(`${friendName()} left`, "The match is over.", false); }
+      break;
+    case "error":
+      link = null;
+      match = null;
+      netBanner(null);
+      history.replaceState(null, "", location.pathname + location.search);
+      showMenu();
+      toast(m.message);
+      break;
+  }
+}
+
+/** Every frame of a friend match: play the friend's shots, follow their cue, send ours. */
+function online(dt: number) {
+  if (state === "aim" && remoteShots.length) {
+    remoteShots.sort((a, b) => a.n - b.n);
+    playRemote(remoteShots.shift()!);
+    return;
+  }
+  if (state !== "aim" || !link) return;
+  if (watching()) {
+    const a = remoteAim;
+    if (!a) return;
+    // Follow the friend's cue smoothly between their updates.
+    const k = 1 - Math.exp(-dt * 16);
+    const from = Math.atan2(aim.y, aim.x);
+    let to = Math.atan2(a.y, a.x);
+    while (to - from > Math.PI) to -= 2 * Math.PI;
+    while (to - from < -Math.PI) to += 2 * Math.PI;
+    const ang = from + (to - from) * k;
+    aim.set(Math.cos(ang), Math.sin(ang));
+    power += (a.p - power) * k;
+    setPowerUI(power);
+    if (tip.side !== a.s || tip.height !== a.h) { tip = { side: a.s, height: a.h }; updateSpinUI(); }
+    if (inHand() !== "none") { balls[0].x += (a.cx - balls[0].x) * k; balls[0].y += (a.cy - balls[0].y) * k; }
+    called = a.c;
+    return;
+  }
+  // Our cue, some twelve times a second while it moves.
+  if (clock - aimSent.at < 0.08) return;
+  const msg: AimMsg = { t: "aim", x: aim.x, y: aim.y, p: power, s: tip.side, h: tip.height, cx: balls[0].x, cy: balls[0].y, c: called };
+  const key = [msg.x, msg.y, msg.p, msg.s, msg.h, msg.cx, msg.cy].map((v) => v.toFixed(4)).join() + msg.c;
+  if (key === aimSent.key) return;
+  link.send(msg);
+  aimSent = { at: clock, key };
+}
+
+/** The friend's shot: from their exact position and game, on our own physics. */
+function playRemote(m: ShotMsg) {
+  // Positions should already agree; if not, it is a determinism bug: say so, and take the shooter's.
+  const mine = cloneBalls(balls);
+  if (m.game.ballInHand !== "none") mine[0] = { ...m.balls[0] }; // the cue ball was being placed
+  // (Only when this browser played every shot before it: catching up after a reload starts from the rack.)
+  if (m.n === shotNo + 1 && (fingerprint(mine) !== fingerprint(m.balls) || JSON.stringify({ ...game }) !== JSON.stringify(m.game))) {
+    const diff = m.balls.filter((b, i) => JSON.stringify(b) !== JSON.stringify(mine[i])).map((b) => `${b.id}: ${JSON.stringify(mine[b.id])} vs ${JSON.stringify(b)}`);
+    console.warn(`Friend match: before shot ${m.n} the position differed from the shooter's (theirs is taken). ${diff.join("; ")} game ${JSON.stringify(game)} vs ${JSON.stringify(m.game)}`);
+  }
+  balls = cloneBalls(m.balls);
+  game = { ...m.game };
+  called = m.called;
+  shotNo = m.n;
+  remoteAim = null;
+  resetViews();
+  aim.set(m.shot.dx, m.shot.dy);
+  tip = { side: m.shot.side, height: m.shot.height };
+  updateSpinUI();
+  power = 0; setPowerUI(0);
+  updateScore();
+  shootExact(m.shot);
+}
+
 /** Where the cue ball may be put before this shot. */
 const inHand = () => (mode === "practice" ? "anywhere" : game.ballInHand);
 
@@ -147,14 +365,14 @@ function resetViews() {
   for (const v of ballViews) { v.fall = null; v.mesh.visible = true; }
 }
 
-function startGame(m: Mode, first: Player = 0) {
+function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0) {
   mode = m;
   cpu = null;
-  names = mode === "cpu" ? ["You", "Computer"] : ["Player 1", "Player 2"];
+  if (mode !== "online") names = mode === "cpu" ? ["You", "Computer"] : ["Player 1", "Player 2"];
   document.querySelectorAll<HTMLElement>(".score .name").forEach((el, i) => { el.textContent = names[i]; });
   breaker = first;
   game = newGame(first);
-  balls = rack8((Math.random() * 1e9) | 0);
+  balls = rack8(seed);
   sim = null;
   state = "aim";
   aim.set(1, 0);
@@ -167,7 +385,8 @@ function startGame(m: Mode, first: Player = 0) {
   $("#score").hidden = !ruled();
   updateScore();
   guideDirty = true;
-  if (ruled()) toast(mode === "cpu" ? (game.turn === 0 ? "Your break" : "The computer breaks") : `${names[game.turn]} breaks`);
+  if (mode === "online") toast(game.turn === seat ? "Your break" : `${names[game.turn]} breaks`);
+  else if (ruled()) toast(mode === "cpu" ? (game.turn === 0 ? "Your break" : "The computer breaks") : `${names[game.turn]} breaks`);
   if (!store.get("hinted")) {
     store.set("hinted", "1");
     setTimeout(() => toast(matchMedia("(pointer: coarse)").matches
@@ -177,9 +396,17 @@ function startGame(m: Mode, first: Player = 0) {
 }
 
 function shoot(p: number) {
-  if (state !== "aim" || p < 0.015 || cpuTurn()) return;
+  if (state !== "aim" || p < 0.015 || watching()) return;
   if (ruled() && onEight(game, balls) && called === null) { toast("Tap a pocket to call the 8"); return; }
-  shootExact({ dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height });
+  const shot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height };
+  if (mode === "online") {
+    // Sent before it is played, with the exact position and game it is played from.
+    if (!link || link.status !== "open") { toast("Reconnecting. Shoot when you're back online."); return; }
+    shotNo++;
+    myLastShot = { t: "shot", id: match!.id, n: shotNo, balls: cloneBalls(balls), game: { ...game }, called, shot };
+    link.send(myLastShot);
+  }
+  shootExact(shot);
 }
 
 function shootExact(shot: Shot) {
@@ -234,8 +461,10 @@ function playHeard(shown: number) {
 
 function respawnCue() {
   const c = balls[0];
-  Object.assign(c, { on: true, x: HEAD_X - 0.12, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 });
-  for (let k = 0; k < 200 && !free(c.x, c.y); k++) { c.x = HEAD_X - 0.05 - Math.random() * 0.3; c.y = (Math.random() - 0.5) * 0.8; }
+  Object.assign(c, { on: true, air: -1, x: HEAD_X - 0.12, y: 0, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0 });
+  // Seeded, so both browsers of a friend match put it in the same place.
+  const r = rng(shotNo * 31 + 7);
+  for (let k = 0; k < 200 && !free(c.x, c.y); k++) { c.x = HEAD_X - 0.05 - r() * 0.3; c.y = (r() - 0.5) * 0.8; }
   ballViews[0].fall = null; ballViews[0].mesh.visible = true;
 }
 
@@ -257,25 +486,30 @@ function endOfShot() {
   const shooter = game.turn;
   const v = judge(game, shotBefore, balls, events, onEight(game, shotBefore) ? called : null);
   if (mode === "cpu") v.message = v.message.replace("for you", shooter === 0 ? "for you" : "for the computer");
+  if (mode === "online") v.message = v.message.replace("for you", shooter === seat ? "for you" : `for ${names[shooter]}`);
   game = advanceGame(game, balls, events, v);
   called = null; calledByUser = false;
   if (v.rerack) {
     toast(v.message);
-    setTimeout(() => startGame(mode, game.turn), 1800);
+    // Online both browsers re-rack alike: the seed follows from the match.
+    const seed = match ? (match.seed + shotNo * 7919) | 0 : undefined;
+    setTimeout(() => startGame(mode, game.turn, seed), 1800);
     return;
   }
   if (game.winner !== null) {
     state = "over";
     updateScore();
-    $("#over-title").textContent = mode === "cpu" ? (game.winner === 0 ? "You win!" : "The computer wins") : `${names[game.winner]} wins`;
-    $("#over-why").textContent = v.message;
-    setTimeout(() => { $("#over").hidden = false; }, 900);
+    const mine = mode === "cpu" ? game.winner === 0 : mode === "online" && game.winner === seat;
+    const title = mine ? "You win!" : mode === "cpu" ? "The computer wins" : `${names[game.winner]} wins`;
+    setTimeout(() => showOver(title, v.message, true), 900);
     return;
   }
   if (!balls[0].on) respawnCue();
   if (v.respot8) ballViews[8].mesh.visible = true;
-  const turnMsg = mode === "cpu"
-    ? (game.turn === 0 ? (shooter === 0 ? "Shoot again" : "Your turn") : (shooter === 1 ? "Computer again" : "Computer's turn"))
+  const me: Player = mode === "online" ? seat : 0;
+  const other = names[1 - me];
+  const turnMsg = mode === "cpu" || mode === "online"
+    ? (game.turn === me ? (shooter === me ? "Shoot again" : "Your turn") : (shooter === me ? `${mode === "cpu" ? "Computer" : other}'s turn` : `${mode === "cpu" ? "Computer" : other} again`))
     : game.turn === shooter ? `${names[shooter]} again` : `${names[game.turn]} to play`;
   toast(v.message ? `${v.message} ${turnMsg}.` : `${turnMsg}.`);
   updateScore();
@@ -466,7 +700,7 @@ function pocketNear(px: number, py: number): number {
 canvas.addEventListener("pointerdown", (e) => {
   sound.haptics = e.pointerType === "touch";
   sound.unlock();
-  if (state !== "aim" || cpuTurn()) return;
+  if (state !== "aim" || watching()) return;
   canvas.setPointerCapture(e.pointerId);
   if (e.pointerType === "mouse" && e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
   if (ruled() && onEight(game, balls)) {
@@ -484,7 +718,7 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (state !== "aim" || cpuTurn()) return;
+  if (state !== "aim" || watching()) return;
   if (dragging) {
     const p = view.toTable(e.clientX, e.clientY - (e.pointerType === "mouse" ? 0 : 36)); // above the finger
     if (p) placeCueAt(p);
@@ -533,11 +767,11 @@ canvas.addEventListener("pointerup", (e) => {
   }
 });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("wheel", (e) => { if (state === "aim" && !cpuTurn()) { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
+canvas.addEventListener("wheel", (e) => { if (state === "aim" && !watching()) { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
 
 // Power slider: pull down, release to shoot; back to the top cancels.
 power$.addEventListener("pointerdown", (e) => {
-  if (state !== "aim" || cpuTurn()) return;
+  if (state !== "aim" || watching()) return;
   sound.unlock();
   power$.setPointerCapture(e.pointerId);
   const set = (y: number) => {
@@ -599,10 +833,60 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-level]
 for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-mode]")) {
   b.addEventListener("click", () => { sound.unlock(); startGame(b.dataset.mode as Mode); });
 }
-function showMenu() { state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; guide.hide(); }
+function showMenu() {
+  if (mode === "online" && link) {
+    if (game.winner === null && match && !confirm(`Leave the match with ${names[1 - seat]}?`)) return;
+    leaveOnline();
+  }
+  state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; $("#invite").hidden = true; guide.hide();
+}
+function showOver(title: string, why: string, rematch: boolean) {
+  $("#over-title").textContent = title;
+  $("#over-why").textContent = why;
+  $("#b-rematch").hidden = !rematch;
+  $("#over").hidden = false;
+}
 $("#b-menu").addEventListener("click", showMenu);
 $("#b-over-menu").addEventListener("click", showMenu);
-$("#b-rematch").addEventListener("click", () => startGame(mode, breaker === 0 ? 1 : 0));
+$("#b-rematch").addEventListener("click", () => {
+  if (mode !== "online") { startGame(mode, breaker === 0 ? 1 : 0); return; }
+  if (!friendHere) { toast(`${names[1 - seat]} isn't here right now`); return; }
+  newMatch(breaker === 0 ? 1 : 0);
+});
+
+// Friend matches: name, host, join by code, the invite card.
+const nameInput = $<HTMLInputElement>("#name");
+nameInput.value = myName;
+nameInput.addEventListener("change", () => {
+  myName = nameInput.value.trim().slice(0, 20);
+  store.set("name", myName);
+  link?.send({ t: "name", name: myName });
+});
+$("#b-online").addEventListener("click", hostMatch);
+const joinInput = $<HTMLInputElement>("#join-code");
+const joinTyped = () => {
+  const code = joinInput.value.trim().toUpperCase();
+  if (/^[A-HJ-NP-Z2-9]{4}$/.test(code)) { sound.unlock(); joinMatch(code); } else toast("A code is four letters and digits");
+};
+$("#b-join").addEventListener("click", joinTyped);
+joinInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinTyped(); });
+$("#b-copy").addEventListener("click", async () => {
+  const url = $<HTMLInputElement>("#invite-link").value;
+  try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { $<HTMLInputElement>("#invite-link").select(); }
+});
+$("#b-share").addEventListener("click", () => {
+  void navigator.share?.({ title: "Pool", text: "Play a game of pool with me", url: $<HTMLInputElement>("#invite-link").value }).catch(() => {});
+});
+$("#b-invite-cancel").addEventListener("click", () => { leaveOnline(); mode = "practice"; showMenu(); });
+// Opened from a friend's link (pool.mkjems.dk/#KX7Q): join, or rejoin our seat after a reload.
+{
+  const code = location.hash.slice(1).toUpperCase();
+  if (/^[A-HJ-NP-Z2-9]{4}$/.test(code)) {
+    const saved = savedSeat();
+    if (saved && saved.code === code) { seat = saved.seat; connect(Link.rejoin(saved)); showInvite("Reconnecting to your game…", null); }
+    else joinMatch(code);
+  }
+}
 
 const guideBtn = $("#b-guide"), soundBtn = $("#b-sound"), labelsBtn = $("#b-labels");
 function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
@@ -656,7 +940,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
   else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; }
-  else if (cpuTurn()) return;
+  else if (watching()) return;
   else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
   else if (k === "w") setTip(tip.side, tip.height + 0.1);
   else if (k === "s") setTip(tip.side, tip.height - 0.1);
@@ -704,6 +988,8 @@ function frame(now: number) {
   last = now;
   adaptQuality(raw);
   clock += dt;
+
+  if (mode === "online") online(dt);
 
   if (state === "stroke" && pendingShot) {
     // The cue swings forward from where it was pulled to, then strikes.
@@ -767,15 +1053,15 @@ function frame(now: number) {
 
   runCpu(dt);
   const aiming = state === "aim";
-  if (aiming && guideDirty && !cpuTurn()) computeGuide();
-  if (!aiming || cpuTurn()) guide.hide();
+  if (aiming && guideDirty && !watching()) computeGuide();
+  if (!aiming || watching()) guide.hide();
   // Which balls are yours: soft rings, only while asking for help (Space or the Numbers button).
   if (aiming && labels && ruled() && !game.breakShot) {
     const t = target(game, balls);
     markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
   } else markers.setRings([]);
   markers.setCall(aiming && ruled() && onEight(game, balls) ? called : null, clock);
-  markers.setHand(balls[0].x, balls[0].y, aiming && ruled() && !cpuTurn() && inHand() !== "none", clock);
+  markers.setHand(balls[0].x, balls[0].y, aiming && ruled() && !watching() && inHand() !== "none", clock);
   updateLabels(cur);
 
   const pull = state === "stroke"
@@ -801,6 +1087,7 @@ if (new URLSearchParams(location.search).has("test")) {
     shoot: (p: number) => shoot(p),
     labels: (on: boolean) => { labels = on; },
     quality: () => view.quality,
+    online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names }),
     timeScale: (k: number) => { timeScale = k; },
     step: (seconds: number) => { manualTime += seconds; },
     falls: () => ballViews.filter((v) => v.fall).map((v) => ({ id: v.id, target: v.fall!.target, z: v.fall!.p.z, done: v.fall!.done })),

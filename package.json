@@ -11,13 +11,16 @@
     "test": "vitest run",
     "engines": "node tests/engines.mjs",
     "bench": "node tests/bench.mjs",
-    "selfplay": "node tests/selfplay.mjs"
+    "selfplay": "node tests/selfplay.mjs",
+    "serve": "npm run build && node server/server.mjs"
   },
   "dependencies": {
-    "three": "^0.181.2"
+    "three": "^0.181.2",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/three": "^0.181.0",
+    "@types/ws": "^8.18.2",
     "esbuild": "^0.25.12",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",

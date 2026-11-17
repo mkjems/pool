@@ -36,6 +36,7 @@
       <div class="row"><button id="spin-reset">Centre</button><button id="spin-done">Done</button></div>
     </div>
     <div id="toast" class="toast" role="status"></div>
+    <div id="net" class="net" role="status" hidden></div>
     <div id="menu" class="menu">
       <div class="card">
         <h1>Pool</h1>
@@ -48,8 +49,27 @@
         <button data-mode="cpu" class="primary">Play the computer</button>
         <button data-mode="pass">Two players, one device</button>
         <button data-mode="practice">Practice</button>
+        <div class="online">
+          <button id="b-online">Play a friend online</button>
+          <div class="row">
+            <input id="join-code" placeholder="Code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your friend's code">
+            <button id="b-join">Join</button>
+          </div>
+          <input id="name" placeholder="Your name (for friends)" maxlength="20" autocomplete="nickname" aria-label="Your name">
+        </div>
         <button id="b-room" class="quiet" aria-pressed="false" title="The faint air of a quiet hall">Room sound: off</button>
-        <p class="soon">Coming: play a friend online.</p>
+      </div>
+    </div>
+    <div id="invite" class="menu" hidden>
+      <div class="card">
+        <h1>Play a friend</h1>
+        <p id="invite-text"></p>
+        <div id="invite-share" hidden>
+          <div class="row"><input id="invite-link" readonly aria-label="Link for your friend"><button id="b-copy">Copy</button></div>
+          <p class="code">Or tell them the code <strong id="invite-code"></strong></p>
+          <button id="b-share" class="primary" hidden>Share the link</button>
+        </div>
+        <button id="b-invite-cancel">Cancel</button>
       </div>
     </div>
     <div id="over" class="menu" hidden>
