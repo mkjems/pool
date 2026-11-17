@@ -4,8 +4,8 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 6, look. Slimmer rails with metal pocket caps done and liked (17 November); see
-[Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
+**Current phase:** 5, sound: new synthetic sounds done (17 November), waiting on your ears; see
+[Next session](#next-session). Phase 6's rails and metal caps are done and liked. Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
 ## Next session
@@ -53,7 +53,11 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
 - Improvement ideas: try them and keep what works.
 - Green cloth is the default (teal stays an option on the Cloth button). Slim rails with brushed metal caps.
 
-**Next steps, in order unless the user says otherwise:** sound (phase 5: the user may bring recordings), the cinematic break and replay (phase 6), friend matches
+**Sound, done 17 November, to judge by ear:** every sound rebuilt (`src/audio/sound.ts`), each event heard at
+its own moment in the simulation, a volume button, room sound in the menu, vibration on Android. See phase 5.
+
+**Next steps, in order unless the user says otherwise:** the user's verdict on the sounds (phase 5: they may
+still bring recordings), the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
 swallowed all input and the code-driven tests did not notice), characters for the computer, and banks and
@@ -462,8 +466,23 @@ Sizes are relative: S, M, L.
 ### Phase 5: sound (M)
 
 - [ ] Find or record samples. Wire events to sounds by impulse and position.
-      Synthetic sounds are wired (ball, cushion, pocket, cue tip, rolling, room reverb); samples later.
-- [ ] Rolling sound, reverb, room tone, vibration, volume settings.
+      Synthetic sounds are wired by impulse and position; samples later, if the user finds good ones.
+      17 November, rebuilt: each impact is computed as a waveform from its physics, a contact pulse as long as
+      the contact (Hertz for resin on resin, ~0.3 ms, shorter when harder; ~1 ms for the leather tip; ~3.5 ms
+      for rubber) followed by the ringing of what was struck. The pocket plays the drop, then the ball running
+      down a coin-op return and knocking into the balls already there.
+      Timing: events are queued during a frame and each is scheduled at its own simulation time (`playHeard`
+      in `src/main.ts`), 30 ms ahead, so a break's clatter isn't bunched into 16 ms frames.
+      Levels: no compressor (its make-up gain treated clicks and thumps unequally); hits within 6 ms share one
+      hit's loudness and are spread by up to 1.5 ms, as a real rack's are; a soft clipper above 0.6 catches
+      the rest. Measured by rendering offline in Chromium (peaks: hard ball click 0.74, hard cue 0.54,
+      hard cushion 0.41, pocket 0.33, a full break 0.84). Bodies of cushion and pocket sounds sit at 180-420 Hz
+      so phone speakers play them.
+- [x] Rolling sound, reverb, room tone, vibration, volume settings.
+      Rolling: a low rumble and a quieter cloth hiss, panned to where the balls are. Room: early reflections
+      and a 0.9 s tail darker as it decays. Room sound (the air of a hall) is off by default, in the menu.
+      Volume: the Sound button steps high, medium, low, off; M mutes and unmutes. Vibration on the strike and
+      on pots after touch input (Android; iPhones have no vibration API).
 
 **Exit:** you say it sounds like a pool table.
 

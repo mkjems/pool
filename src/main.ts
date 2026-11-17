@@ -12,7 +12,7 @@ import { makeTable, CLOTHS, type Cloth } from "./render/table";
 import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls";
 import { CueView, GuideView, type GuidePath } from "./render/cue";
 import { Markers } from "./render/markers";
-import { Sound } from "./audio/sound";
+import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over";
@@ -190,13 +190,15 @@ function shootExact(shot: Shot) {
   guide.hide();
 }
 
+/** Events of this frame, to be heard at the moment they happened in the simulation (see playHeard). */
+const heard: Array<{ e: SimEvent; x: number; down: number }> = [];
+
 function onEvent(e: SimEvent) {
+  const s = sim!;
+  heard.push({ e, x: e.type === "pocket" ? TABLE.pockets[e.pocket].hx : s.balls[e.a].x, down: s.balls.filter((b) => !b.on).length - 1 });
   switch (e.type) {
-    case "ball": sound.ball(e.speed, sim!.balls[e.a].x); break;
-    case "cushion": sound.cushion(e.speed, e.x); break;
-    case "cue": sound.cue(e.speed, e.miscue); if (e.miscue) toast("Miscue"); break;
+    case "cue": if (e.miscue) toast("Miscue"); break;
     case "pocket": {
-      sound.pocket(e.speed, TABLE.pockets[e.pocket].hx);
       const v = ballViews[e.a];
       const p = TABLE.pockets[e.pocket];
       v.drop = 0;
@@ -205,6 +207,21 @@ function onEvent(e: SimEvent) {
       break;
     }
   }
+}
+
+/**
+ * Sound each event at its own moment: the frame ran the physics up to sim.t, and the balls on screen are drawn at
+ * `shown`; an event at e.t is heard (e.t - shown) from now, plus a small lead so none falls in the past.
+ */
+function playHeard(shown: number) {
+  for (const { e, x, down } of heard) {
+    const d = 0.03 + e.t - shown;
+    if (e.type === "ball") sound.ball(e.speed, x, d);
+    else if (e.type === "cushion") sound.cushion(e.speed, x, d);
+    else if (e.type === "cue") sound.cue(e.speed, e.miscue, d);
+    else sound.pocket(e.speed, x, down, d);
+  }
+  heard.length = 0;
 }
 
 function respawnCue() {
@@ -439,6 +456,7 @@ function pocketNear(px: number, py: number): number {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
+  sound.haptics = e.pointerType === "touch";
   sound.unlock();
   if (state !== "aim" || cpuTurn()) return;
   canvas.setPointerCapture(e.pointerId);
@@ -588,16 +606,38 @@ function cycleCloth() {
   store.set("cloth", cloth);
   toast(`Cloth: ${cloth}`);
 }
+let lastVolume: Volume = "high";
+function setVolume(v: Volume) {
+  sound.setVolume(v);
+  if (v !== "off") lastVolume = v;
+  soundBtn.textContent = `Sound: ${v}`;
+  store.set("volume", v);
+}
+/** The button steps down through the volumes and round again; M mutes and unmutes. */
+function cycleVolume() {
+  sound.unlock();
+  setVolume(VOLUMES[(VOLUMES.indexOf(sound.volume) + VOLUMES.length - 1) % VOLUMES.length]);
+}
 function toggleSound() {
   sound.unlock();
-  sound.setMuted(!sound.muted);
-  soundBtn.textContent = sound.muted ? "Sound off" : "Sound on";
-  store.set("muted", sound.muted ? "1" : "0");
+  setVolume(sound.volume === "off" ? lastVolume : "off");
 }
-if (store.get("muted") === "1") { sound.setMuted(true); soundBtn.textContent = "Sound off"; }
+{
+  const saved = store.get("volume") as Volume | null;
+  setVolume(saved && VOLUMES.includes(saved) ? saved : store.get("muted") === "1" ? "off" : "high");
+}
+const roomBtn = $("#b-room");
+function setRoom(on: boolean) {
+  sound.setRoomTone(on);
+  roomBtn.textContent = `Room sound: ${on ? "on" : "off"}`;
+  roomBtn.setAttribute("aria-pressed", String(on));
+  store.set("room", on ? "1" : "0");
+}
+setRoom(store.get("room") === "1");
+roomBtn.addEventListener("click", () => { sound.unlock(); setRoom(!sound.roomTone); });
 guideBtn.addEventListener("click", () => setGuide(guideLevel === "full" ? "short" : guideLevel === "short" ? "off" : "full"));
 $("#b-cloth").addEventListener("click", cycleCloth);
-soundBtn.addEventListener("click", toggleSound);
+soundBtn.addEventListener("click", cycleVolume);
 labelsBtn.addEventListener("click", () => { labels = !labels; labelsBtn.classList.toggle("on", labels); });
 
 window.addEventListener("keydown", (e) => {
@@ -677,12 +717,13 @@ function frame(now: number) {
       acc -= DT;
       n++;
     }
+    playHeard(sim.t - DT + acc);
     if (!sim.moving()) endOfShot();
   }
 
   const cur = sim ? sim.balls : balls;
   const alpha = sim ? Math.min(1, acc / DT) : 1;
-  let rolling = 0;
+  let rolling = 0, rollingX = 0;
   for (const b of cur) {
     const v = ballViews[b.id];
     if (b.on) {
@@ -692,7 +733,7 @@ function frame(now: number) {
       const y = sim ? prevY[b.id] + (b.y - prevY[b.id]) * alpha : b.y;
       v.mesh.position.set(x, y, R);
       table.shadowBalls[b.id].set(x, y, R, 1);
-      if (isMoving(b)) rolling += Math.hypot(b.vx, b.vy);
+      if (isMoving(b)) { const sp = Math.hypot(b.vx, b.vy); rolling += sp; rollingX += sp * x; }
     } else if (v.drop >= 0) {
       // Into the pocket: slide to the hole and sink.
       v.drop += dt;
@@ -705,7 +746,7 @@ function frame(now: number) {
       table.shadowBalls[b.id].w = 0;
     }
   }
-  sound.rolling(rolling);
+  sound.rolling(rolling, rolling > 0 ? rollingX / rolling : 0);
 
   runCpu(dt);
   const aiming = state === "aim";
