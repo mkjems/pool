@@ -3,6 +3,7 @@
 8-ball pool for mkjems.dk (`pool.mkjems.dk`): real physics, a 3D table seen from above, against the computer
 or a friend. The plan, decisions and progress are in [docs/Plan.md](docs/Plan.md); keep it up to date as work
 is done (tick steps, move **Current phase**, add short notes under steps).
+**New session: read the plan's [Next session](docs/Plan.md#next-session) section first.**
 
 ## Working on the project
 
@@ -16,13 +17,14 @@ is done (tick steps, move **Current phase**, add short notes under steps).
 
 ## Layout
 
-- `src/sim/`: physics (and later rules). No DOM. **Deterministic**: only `+ - * /` and `Math.sqrt`, never
+- `src/sim/`: physics and rules. No DOM. **Deterministic**: only `+ - * /` and `Math.sqrt`, never
   `Math.sin/cos/atan2/hypot/exp/pow` or `Math.random` (see `constants.ts`). Send directions as x/y, not angles.
 - `src/render/`: three.js. Table built in simulation coordinates (x along, y across, z up) inside a group
   turned upright. Ball patterns are computed in the shader; lamp shadows of the balls are computed per pixel.
 - `src/ai/`: the computer opponent, pure (runs in a Web Worker in the game, in Node for tests).
 - `src/audio/`: synthetic sounds (Web Audio) until real recordings replace them.
-- `src/main.ts`: the frame loop, input and the practice table.
+- `src/main.ts`: the frame loop, input, menus, the game modes (computer, two players, practice), scoreboard.
+- `src/sim/rules.ts`: 8-ball rules (pure, like the physics); written out for players in `docs/Rules.md`.
 
 ## Rules of thumb
 
