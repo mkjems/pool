@@ -6,9 +6,11 @@ import { R, TABLE_L, TABLE_W } from "../sim/constants";
 import { TABLE, type Segment } from "../sim/table";
 
 export const CUSHION_W = 0.05; // nose to wood
-export const RAIL_W = 0.115; // wood
+export const RAIL_W = 0.07; // wood
 export const CUSHION_H = 0.038;
 export const WOOD_H = 0.046;
+/** Top of the metal pocket caps. */
+export const CAP_TOP = WOOD_H + 0.004;
 const HL = TABLE_L / 2, HW = TABLE_W / 2;
 
 export const CLOTHS = {
@@ -83,8 +85,26 @@ function woodTexture() {
   });
 }
 
-/** Adds the lamp shadows of every ball to a standard material, computed exactly per pixel. */
-function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1, shadows = true) {
+function brushedTexture() {
+  // Fine streaks along x: each row of pixels a little lighter or darker, with a faint grain inside the row.
+  return noiseTexture(256, (g, img) => {
+    const d = img.data;
+    const rows = Array.from({ length: 256 }, () => Math.random());
+    for (let i = 0; i < d.length; i += 4) {
+      const p = i / 4, y = (p / 256) | 0;
+      const v = 200 + (rows[y] - 0.5) * 60 + (Math.random() - 0.5) * 14;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  });
+}
+
+/**
+ * Adds the lamp shadows of every ball to a standard material, computed exactly per pixel, and the lamps' pools of
+ * light. `direct` scales the overhead light's mirror reflection (seen straight from above it washes out metal).
+ */
+function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1, shadows = true, direct = 1) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uBalls = { value: balls };
     sh.uniforms.uLamps = { value: LAMPS };
@@ -136,33 +156,91 @@ float ballShadow(vec3 p) {
   return sh;
 }`,
       )
+      .replace("#include <aomap_fragment>", `reflectedLight.directSpecular *= ${direct.toFixed(3)};\n#include <aomap_fragment>`)
       .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= ${shadows ? "ballShadow(vTablePos) * " : ""}lampPool(vTablePos);`);
   };
-  m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}`;
+  m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}-${direct}`;
 }
 
-/** The wood's inner edge: the rectangle behind the cushions joined with the pocket holes. */
+/** A pocket's opening seen from above: a capsule from the hole's centre a little way out into the rail. */
+interface Opening { ax: number; ay: number; bx: number; by: number; r: number }
+
+const OPENINGS: Opening[] = TABLE.pockets.map((p) => {
+  if (p.kind === "side") return { ax: p.hx, ay: p.hy, bx: p.hx + p.ux * 0.008, by: p.hy + p.uy * 0.008, r: p.hr };
+  // Corners: nearly round, wide enough to meet both noses at the mouth and to reach past the rail's inner
+  // corner, so the opening cuts into the metal cap.
+  const at = (d: number) => [p.mx + p.ux * d, p.my + p.uy * d];
+  const [ax, ay] = at(0.05), [bx, by] = at(0.06);
+  return { ax, ay, bx, by, r: 0.077 };
+});
+
+/** A circle around a pocket's opening (for the called-pocket ring). */
+export function openingCircle(pocket: number): { x: number; y: number; r: number } {
+  const o = OPENINGS[pocket];
+  const half = Math.hypot(o.bx - o.ax, o.by - o.ay) / 2;
+  return { x: (o.ax + o.bx) / 2, y: (o.ay + o.by) / 2, r: o.r + half };
+}
+
+function insideOpening(o: Opening, x: number, y: number): boolean {
+  const dx = o.bx - o.ax, dy = o.by - o.ay;
+  const t = Math.max(0, Math.min(1, ((x - o.ax) * dx + (y - o.ay) * dy) / (dx * dx + dy * dy)));
+  const ex = x - o.ax - dx * t, ey = y - o.ay - dy * t;
+  return ex * ex + ey * ey < o.r * o.r;
+}
+
+function capsulePoints(o: Opening, n = 40): THREE.Vector2[] {
+  const a = Math.atan2(o.by - o.ay, o.bx - o.ax);
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = a - Math.PI / 2 + (i / n) * Math.PI;
+    pts.push(new THREE.Vector2(o.bx + Math.cos(t) * o.r, o.by + Math.sin(t) * o.r));
+  }
+  for (let i = 0; i <= n; i++) {
+    const t = a + Math.PI / 2 + (i / n) * Math.PI;
+    pts.push(new THREE.Vector2(o.ax + Math.cos(t) * o.r, o.ay + Math.sin(t) * o.r));
+  }
+  return pts;
+}
+
+/** The wood's inner edge: the rectangle behind the cushions joined with the pocket openings (counter-clockwise). */
 function railInnerContour(): THREE.Vector2[] {
   const rx = HL + CUSHION_W, ry = HW + CUSHION_W;
-  const holes = TABLE.pockets.map((p) => ({ x: p.hx, y: p.hy, r: p.hr + 0.006 }));
+  const inside = (x: number, y: number) => OPENINGS.some((o) => insideOpening(o, x, y));
   const pts: THREE.Vector2[] = [];
-  const N = 1440;
+  const N = 4096;
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2;
     const dx = Math.cos(a), dy = Math.sin(a);
-    // Exit distance from the rectangle.
+    // Exit distance from the rectangle, then on through any opening that holds that point.
     let t = Math.min(dx !== 0 ? rx / Math.abs(dx) : Infinity, dy !== 0 ? ry / Math.abs(dy) : Infinity);
-    for (const h of holes) {
-      const b = dx * h.x + dy * h.y;
-      const c = h.x * h.x + h.y * h.y - h.r * h.r;
-      const disc = b * b - c;
-      if (disc <= 0) continue;
-      const near = b - Math.sqrt(disc), far = b + Math.sqrt(disc);
-      if (near <= t && far > t) t = far;
+    if (inside(dx * t, dy * t)) {
+      let hi = t;
+      while (inside(dx * hi, dy * hi)) hi += 0.004;
+      let lo = hi - 0.004;
+      for (let k = 0; k < 20; k++) { const m = (lo + hi) / 2; if (inside(dx * m, dy * m)) lo = m; else hi = m; }
+      t = hi;
     }
     pts.push(new THREE.Vector2(dx * t, dy * t));
   }
   return pts;
+}
+
+/**
+ * The run of a closed counter-clockwise outline inside the region f >= 0 (one contiguous run), with its ends
+ * placed on the boundary.
+ */
+function runInside(poly: THREE.Vector2[], f: (p: THREE.Vector2) => number): THREE.Vector2[] {
+  const n = poly.length;
+  let s = poly.findIndex((p, i) => f(p) >= 0 && f(poly[(i - 1 + n) % n]) < 0);
+  const out: THREE.Vector2[] = [];
+  const cross = (a: THREE.Vector2, b: THREE.Vector2) => {
+    const fa = f(a), fb = f(b);
+    return a.clone().lerp(b, fa / (fa - fb));
+  };
+  out.push(cross(poly[(s - 1 + n) % n], poly[s]));
+  for (; f(poly[s % n]) >= 0; s++) out.push(poly[s % n].clone());
+  out.push(cross(poly[(s - 1) % n], poly[s % n]));
+  return out;
 }
 
 function roundedRect(hx: number, hy: number, r: number): THREE.Shape {
@@ -198,11 +276,7 @@ export function makeTable(): TableView {
   const bedShape = new THREE.Shape();
   const bx = HL + CUSHION_W + 0.06, by = HW + CUSHION_W + 0.06;
   bedShape.moveTo(-bx, -by); bedShape.lineTo(bx, -by); bedShape.lineTo(bx, by); bedShape.lineTo(-bx, by);
-  for (const p of TABLE.pockets) {
-    const h = new THREE.Path();
-    h.absarc(p.hx, p.hy, p.hr, 0, Math.PI * 2, true);
-    bedShape.holes.push(h);
-  }
+  for (const o of OPENINGS) bedShape.holes.push(new THREE.Path(capsulePoints(o)));
   const bedGeo = new THREE.ShapeGeometry(bedShape, 24);
   const clothTex = clothTexture();
   // UVs in metres: one weave tile per 12 cm.
@@ -238,8 +312,10 @@ export function makeTable(): TableView {
   }
 
   // Wood rails, lacquered.
-  const rail = roundedRect(HL + CUSHION_W + RAIL_W, HW + CUSHION_W + RAIL_W, 0.035);
-  rail.holes.push(new THREE.Path(railInnerContour().reverse()));
+  const X0 = HL + CUSHION_W + RAIL_W, Y0 = HW + CUSHION_W + RAIL_W;
+  const rail = roundedRect(X0, Y0, 0.03);
+  const inner = railInnerContour();
+  rail.holes.push(new THREE.Path(inner.slice().reverse()));
   const railGeo = new THREE.ExtrudeGeometry(rail, {
     depth: WOOD_H - 0.008, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.006, bevelSegments: 4, curveSegments: 16,
   });
@@ -259,36 +335,63 @@ export function makeTable(): TableView {
   const railMesh = new THREE.Mesh(railGeo, woodMat);
   group.add(railMesh);
 
-  // Pocket cups and leather rims.
+  // Pocket cups: black liners going down from each opening.
   const cupMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.95, side: THREE.DoubleSide });
-  const rimMat = new THREE.MeshPhysicalMaterial({ color: 0x2b1a10, roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.35 });
-  rimMat.userData.env = 0.4;
-  for (const p of TABLE.pockets) {
-    const cup = new THREE.Mesh(new THREE.CylinderGeometry(p.hr, p.hr * 0.85, 0.14, 40, 1, true), cupMat);
-    cup.rotation.x = Math.PI / 2;
-    cup.position.set(p.hx, p.hy, -0.07);
+  const hidden = new THREE.MeshBasicMaterial({ visible: false });
+  const black = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  for (const o of OPENINGS) {
+    const shape = new THREE.Shape(capsulePoints(o));
+    const cup = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.14, bevelEnabled: false }), [hidden, cupMat]);
+    cup.position.z = -0.14;
     group.add(cup);
-    const bottom = new THREE.Mesh(new THREE.CircleGeometry(p.hr * 0.85, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    bottom.position.set(p.hx, p.hy, -0.14);
+    const bottom = new THREE.Mesh(new THREE.ShapeGeometry(shape), black);
+    bottom.position.z = -0.135;
     group.add(bottom);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(p.hr + 0.004, 0.0045, 10, 48), rimMat);
-    rim.position.set(p.hx, p.hy, WOOD_H - 0.002);
-    rim.scale.z = 0.6;
-    group.add(rim);
   }
 
-  // Diamond sights, inlaid mother-of-pearl.
+  // Metal caps: an L round each corner and a plate over each side pocket, cut from the rail's own outline so the
+  // pocket openings run through them. Their bevel reaches as far as the wood's, covering its edge.
+  const brushed = brushedTexture();
+  brushed.repeat.set(1.5, 4);
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0xd4d7dc, metalness: 1, roughness: 0.36, map: brushed });
+  metalMat.userData.env = 0.3;
+  withBallShadows(metalMat, shadowBalls, 0.5, false, 0.12);
+  // The outline in steps of a few millimetres, so every cap finds its stretch of it.
+  const outer: THREE.Vector2[] = [];
+  const corners = rail.getPoints(24);
+  for (let i = 0; i < corners.length; i++) {
+    const a = corners[i], b = corners[(i + 1) % corners.length];
+    const k = Math.ceil(a.distanceTo(b) / 0.004);
+    for (let j = 0; j < k; j++) outer.push(a.clone().lerp(b, j / k));
+  }
+  const capShapes: THREE.Shape[] = [];
+  const ARM = 0.19, PLATE = 0.105;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    const f = (p: THREE.Vector2) => Math.min(sx * p.x - (X0 - ARM), sy * p.y - (Y0 - ARM));
+    capShapes.push(new THREE.Shape(runInside(inner, f).concat(runInside(outer, f).reverse())));
+  }
+  for (const sy of [-1, 1]) {
+    const f = (p: THREE.Vector2) => Math.min(PLATE - Math.abs(p.x), sy * p.y);
+    capShapes.push(new THREE.Shape(runInside(inner, f).concat(runInside(outer, f).reverse())));
+  }
+  const capGeo = new THREE.ExtrudeGeometry(capShapes, {
+    depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.006, bevelSegments: 4, curveSegments: 8,
+  });
+  const caps = new THREE.Mesh(capGeo, metalMat);
+  caps.position.z = CAP_TOP - 0.01;
+  group.add(caps);
+
+  // Sights: small round inlays of mother-of-pearl.
   const pearl = new THREE.MeshPhysicalMaterial({ color: 0xf2efe6, roughness: 0.25, clearcoat: 1, iridescence: 0.6 });
   pearl.userData.env = 1;
-  const dGeo = new THREE.CircleGeometry(0.0065, 4);
+  const dGeo = new THREE.CircleGeometry(0.0052, 24);
   const mid = CUSHION_W + RAIL_W * 0.5;
-  const sights: Array<[number, number, boolean]> = [];
-  for (const k of [-3, -2, -1, 1, 2, 3]) for (const sy of [-1, 1]) sights.push([(k * TABLE_L) / 8, sy * (HW + mid), false]);
-  for (const k of [-1, 0, 1]) for (const sx of [-1, 1]) sights.push([sx * (HL + mid), (k * TABLE_W) / 4, true]);
-  for (const [x, y, vertical] of sights) {
+  const sights: Array<[number, number]> = [];
+  for (const k of [-3, -2, -1, 1, 2, 3]) for (const sy of [-1, 1]) sights.push([(k * TABLE_L) / 8, sy * (HW + mid)]);
+  for (const k of [-1, 0, 1]) for (const sx of [-1, 1]) sights.push([sx * (HL + mid), (k * TABLE_W) / 4]);
+  for (const [x, y] of sights) {
     const d = new THREE.Mesh(dGeo, pearl);
     d.position.set(x, y, WOOD_H + 0.0003);
-    d.scale.set(vertical ? 0.7 : 1.4, vertical ? 1.4 : 0.7, 1);
     group.add(d);
   }
 
@@ -312,7 +415,7 @@ export function makeTable(): TableView {
     shadowBalls,
     setCloth(c: Cloth) {
       clothMat.color.set(CLOTHS[c]);
-      cushionMat.color.set(CLOTHS[c]).multiplyScalar(1.06);
+      cushionMat.color.set(CLOTHS[c]).multiplyScalar(1.2);
     },
   };
 }

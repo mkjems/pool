@@ -2,8 +2,7 @@
 
 import * as THREE from "three";
 import { R } from "../sim/constants";
-import { TABLE } from "../sim/table";
-import { WOOD_H } from "./table";
+import { CAP_TOP, openingCircle } from "./table";
 
 export class Markers {
   private rings: THREE.Mesh[] = [];
@@ -34,7 +33,7 @@ export class Markers {
       this.rings.push(m);
     }
     this.callMat = new THREE.MeshBasicMaterial({ color: 0xf0b54a, transparent: true, opacity: 0.9, depthWrite: false });
-    this.call = new THREE.Mesh(new THREE.RingGeometry(0.068, 0.078, 64), this.callMat);
+    this.call = new THREE.Mesh(new THREE.RingGeometry(1.02, 1.14, 64), this.callMat);
     this.call.renderOrder = 4;
     this.call.visible = false;
     parent.add(this.call);
@@ -58,8 +57,9 @@ export class Markers {
   setCall(pocket: number | null, time: number) {
     this.call.visible = pocket !== null;
     if (pocket === null) return;
-    const p = TABLE.pockets[pocket];
-    this.call.position.set(p.hx, p.hy, WOOD_H + 0.003);
+    const c = openingCircle(pocket);
+    this.call.position.set(c.x, c.y, CAP_TOP + 0.002);
+    this.call.scale.setScalar(c.r);
     this.callMat.opacity = 0.65 + 0.3 * Math.sin(time * 4);
   }
 

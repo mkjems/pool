@@ -86,10 +86,11 @@ export function makeView(canvas: HTMLCanvasElement): View {
       renderer.setSize(w, h, false);
       const portrait = h > w * 1.05;
       view.portrait = portrait;
-      // How much beyond the cushion noses must show: the whole table on big screens, less on phones.
+      // How much beyond the cushion noses must show: the whole table on big screens; on phones the pockets whole
+      // and most of the rail.
       const small = Math.min(w, h) < 560;
       // On big screens: the whole table with air around it (room to move the mouse behind any ball).
-      const m = small ? CUSHION_W + RAIL_W * 0.45 : CUSHION_W + RAIL_W + 0.11;
+      const m = small ? CUSHION_W + RAIL_W * 0.8 : CUSHION_W + RAIL_W + 0.11;
       // Room for the controls: the power bar at the side, the buttons and score along the top (kept symmetric
       // at the bottom so the table stays centred).
       const sidePx = small ? 0 : 72, topPx = small ? 0 : 52;

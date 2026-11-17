@@ -4,8 +4,8 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 6, look: slimmer rails with metal pocket caps (asked for on 17 November, see
-[Next session](#next-session)). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
+**Current phase:** 6, look. Slimmer rails with metal pocket caps done (17 November), waiting on your eye; see
+[Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
 ## Next session
@@ -16,9 +16,15 @@ Handoff written 17 November 2026, end of the first working session. Start here.
 ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 and JavaScriptCore agree
 (`npm run engines`), `npm run selfplay` finishes every game. 60 fps at 2× on the user's Mac.
 
-**Asked for, not done yet:**
+**Done since the handoff, to judge:** slimmer rails with metal caps (item 1 below). Rails 0.07 m of wood
+(was 0.115); brushed-steel L caps on the corners and plates over the side pockets; round pocket openings cut
+into the caps, with the cushion jaws pointing into them; round pearl sights; cushions a little brighter than the
+bed. 60 fps at 2560 × 1300 × 2 (headless Chromium). Open: whether the caps are the right brightness and size
+(`metalMat` and `ARM`/`PLATE` in `src/render/table.ts`), and whether the teal cloth should become the default.
 
-1. **Slimmer rails, with the details of a real table** (17 November). The user sent a photo of a coin-op style
+**Asked for:**
+
+1. ~~**Slimmer rails, with the details of a real table** (17 November).~~ Done, see above. The user sent a photo of a coin-op style
    table seen from straight above. What it shows, compared with ours:
    - The wood rails are much narrower: about a sixth of the cloth's width each side including the cushion,
      where ours (`RAIL_W` 0.115 m + `CUSHION_W` 0.05 m in `src/render/table.ts`) look massive. Try `RAIL_W`
@@ -46,7 +52,7 @@ ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 a
 - Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
 - Improvement ideas: try them and keep what works.
 
-**Next steps, in order unless the user says otherwise:** the rails and pocket caps above (phase 6); then
+**Next steps, in order unless the user says otherwise:** the user's verdict on the rails and caps; then
 sound (phase 5: the user may bring recordings), the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
@@ -57,7 +63,9 @@ kicks in its planning.
 browser, and drive it through `window.__pool` (`start('cpu' | 'pass' | 'practice')`, `place([[id, x, y], ...])`,
 `setGame({...})`, `aimAt(x, y)`, `screen(x, y)`, `shoot(power)`, `labels(true)`, `quality()`). Use real
 `page.mouse` events when testing input. Frame time: count 60 `requestAnimationFrame` intervals and take the
-median; the user's window is about 2560 × 1300 CSS pixels at device pixel ratio 2.
+median; the user's window is about 2560 × 1300 CSS pixels at device pixel ratio 2. If the Playwright
+browser is locked by another session, a Node script importing `playwright` (it is in the npx cache) and
+launching headless Chromium works too: WebGL renders, and the frame timing matched.
 
 How to keep this plan up to date:
 
@@ -466,6 +474,9 @@ Sizes are relative: S, M, L.
       pixels). Now one directional light, the lamp pools painted in the cloth shader, lamp reflections from the
       environment map only on the balls: 60 fps at 2×. Resolution drops by itself if frames get slow.
       Balls are drawn between the last two physics steps, so their motion is even at any frame rate.
+      Rails and caps (17 November): the pocket openings (`OPENINGS` in `src/render/table.ts`) are drawn only,
+      not physics; bed, wood, caps and cups are all cut from them. Flat metal seen from straight above mirrors
+      the overhead light and goes white: its direct reflection is scaled down in the shader (`direct`).
 - [ ] Cinematic break, replay of the last shot, the winning shot.
 - [ ] Start screen, settings, the game's own name and identity.
 
