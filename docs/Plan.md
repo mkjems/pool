@@ -555,9 +555,9 @@ Sizes are relative: S, M, L.
       darker, then darker again ("still too bright"): contact 3.5 → 5 ms, the 1 kHz ring and the 3.9 kHz click
       removed, noise quieter and low-passed at 600 Hz instead of 2000. Then 20% quieter and pitched down to 0.85; its settings
       are now in `CUSHION` at the top of `src/audio/sound.ts`, for the user to tune by ear; the user settled on
-      volume 0.7, pitch 0.75. Source of the recordings: "a free open licence sound library" (the user,
-      18 November); which library and each sound's licence still to note before going online (credits
-      needed if any are CC-BY).
+      volume 0.7, pitch 0.75. Source of the recordings: Freesound; licences and credits in
+      `sounds/CREDITS.md` (the ball clack is CC0; the cue hits and the pocket drop still to identify, the
+      game must credit any CC-BY or CC-BY-NC sound before it goes online).
 - [x] Rolling sound, reverb, room tone, vibration, volume settings.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than
