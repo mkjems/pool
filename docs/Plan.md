@@ -25,6 +25,9 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
 outline, so each corner's two sides differed) and too fussy, and sent a drawing: a plain wooden frame, each hole
 square across between the jaws with small rounded corners and round at the back, a leather lip where it cuts into
 the wood. Done that way (`HOLES` in `src/render/table.ts`); all four corners and both sides now match.
+Then (same day) the user asked for the leather to be flush with the cushion and allowed wider wood: the hole
+now follows the cushion jaws to the backs of the cushions and goes straight on into the rail, so each jaw runs
+into the lip's inner edge; rails 0.085 m of wood (was 0.07), so the side holes have their full depth.
 
 **Asked for:**
 
@@ -558,8 +561,10 @@ Sizes are relative: S, M, L.
       November. The holes as drawn (`HOLES` in `src/render/table.ts`): a rectangle in each pocket's own frame,
       straight across between the jaws with small rounded corners, round at the back; bed and cups are cut by
       it, the wood by it grown by the leather lip (`RIM_W`). Its near edge is the physics capsule's (the drop
-      line). Corners hold the whole capsule; side holes are drawn 16 mm shallower than the capsule so wood is
-      left behind them, the fall's leaning facing keeps a ball out of that part.
+      line), between the jaws it follows them, behind the cushions it is as wide as the jaws end, and it is as
+      deep as the capsule (at the corners that must reach past where the cushion backs meet, or the lip breaks
+      in two). Behind the cushions the capsule is wider than the drawn hole; the fall's leaning facing under the
+      rail covers that.
       Pocket drops (17 November): the physics hands over the ball's position, velocity and spin (new fields on
       the pocket event) and `Fall` plays it out in 3D at 2000 steps a second with gravity, restitution and
       friction with spin: the lip of the bed, the jaws, and the facing under the rail, which leans in over

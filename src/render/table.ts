@@ -6,7 +6,7 @@ import { R, TABLE_L, TABLE_W } from "../sim/constants";
 import { TABLE, type Segment } from "../sim/table";
 
 export const CUSHION_W = 0.05; // nose to wood
-export const RAIL_W = 0.07; // wood
+export const RAIL_W = 0.085; // wood
 export const CUSHION_H = 0.038;
 export const WOOD_H = 0.046;
 /** Top of the leather lip round each pocket, just proud of the wood. */
@@ -162,51 +162,80 @@ export function openingCircle(pocket: number): { x: number; y: number; r: number
 }
 
 /**
- * The hole as drawn: a rectangle in the pocket's own frame (u into the pocket, v across it), straight across
- * between the jaws with small rounded corners, round at the back. Its near edge is the physics capsule's, the drop
- * line. At the corners it holds the whole capsule; at the sides the back is drawn a little shallower, so wood is
- * left behind it (the ball's fall treats that part as under the rail's overhang, see pocketfall.ts). The same for
- * every pocket of a kind, so all four corners match.
+ * The hole as drawn, in the pocket's own frame (u into the pocket from the middle of the mouth, v across it):
+ * from the drop line (the near edge of the physics capsule) it follows the cushion jaws to the backs of the
+ * cushions, then goes straight on into the rail as wide as the jaws end, round at the back. So the jaws run
+ * straight into the leather lip. The same for every pocket of a kind, so all four corners match.
  */
-interface Hole { cx: number; cy: number; ux: number; uy: number; u0: number; u1: number; w: number; rn: number; rb: number }
+interface Hole {
+  cx: number; cy: number; ux: number; uy: number;
+  /** Between the jaws: a convex quad, counter-clockwise, in (u, v). */
+  quad: Array<[number, number]>;
+  /** On into the rail: u from drop to u1, |v| up to wb, back corners rounded by rb. */
+  drop: number; u1: number; wb: number; rb: number;
+  /** A point inside both parts, to trace the outline from. */
+  mid: number;
+}
 
 const HOLES: Hole[] = TABLE.pockets.map((p) => {
+  const toUV = (x: number, y: number): [number, number] => {
+    const dx = x - p.mx, dy = y - p.my;
+    return [dx * p.ux + dy * p.uy, -dx * p.uy + dy * p.ux];
+  };
+  // Each jaw from its nose to where it meets the back of the cushion (as the cushions are built).
+  const jaws = p.noses.map((n) => {
+    const jaw = TABLE.segments.find((s) => s.kind === "jaw" && Math.abs(s.ax - n.x) < 1e-9 && Math.abs(s.ay - n.y) < 1e-9)!;
+    const rail = TABLE.segments.find((s) => s.kind === "rail" &&
+      ((Math.abs(s.ax - n.x) < 1e-9 && Math.abs(s.ay - n.y) < 1e-9) || (Math.abs(s.bx - n.x) < 1e-9 && Math.abs(s.by - n.y) < 1e-9)))!;
+    const t = CUSHION_W / -(jaw.tx * rail.nx + jaw.ty * rail.ny);
+    const [nu, nv] = toUV(n.x, n.y), [bu, bv] = toUV(n.x + jaw.tx * t, n.y + jaw.ty * t);
+    const k = (p.drop - nu) / (bu - nu);
+    return { near: [p.drop, nv + (bv - nv) * k] as [number, number], back: [bu, bv] as [number, number] };
+  });
+  const [lo, hi] = jaws[0].back[1] < jaws[1].back[1] ? jaws : [jaws[1], jaws[0]];
+  const wb = Math.min(Math.abs(lo.back[1]), Math.abs(hi.back[1]));
   const o = p.opening;
-  const half = Math.hypot(o.bx - o.ax, o.by - o.ay) / 2;
-  const corner = p.kind === "corner";
-  const u1 = corner ? o.r : o.r - 0.016;
   return {
-    cx: (o.ax + o.bx) / 2, cy: (o.ay + o.by) / 2, ux: p.ux, uy: p.uy,
-    u0: -o.r, u1, w: half + o.r, rn: corner ? 0.022 : 0.02, rb: corner ? o.r : (u1 + o.r) / 2 - 0.001,
+    cx: p.mx, cy: p.my, ux: p.ux, uy: p.uy,
+    quad: [lo.near, lo.back, hi.back, hi.near],
+    // As deep as the physics capsule: at the corners that reaches just past where the cushions' backs meet, so
+    // the lip is one piece round the back.
+    drop: p.drop, u1: p.drop + 2 * o.r, wb, rb: wb * 0.9,
+    mid: (p.drop + lo.back[0]) / 2,
   };
 });
 
-/** Signed distance from (x, y) to a hole's edge grown by g (negative inside). */
+/** Signed distance (near enough) from (x, y) to a hole's edge grown by g (negative inside). */
 function holeDist(h: Hole, x: number, y: number, g: number): number {
   const dx = x - h.cx, dy = y - h.cy;
   const u = dx * h.ux + dy * h.uy, v = -dx * h.uy + dy * h.ux;
-  const uc = (h.u0 + h.u1) / 2, hu = (h.u1 - h.u0) / 2;
-  const r = u > uc ? h.rb : h.rn;
-  const qx = Math.abs(u - uc) - hu + r, qy = Math.abs(v) - h.w + r;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r - g;
+  // The quad: the farthest of its edges' lines.
+  let dq = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const [au, av] = h.quad[i], [bu, bv] = h.quad[(i + 1) % 4];
+    const eu = bu - au, ev = bv - av, l = Math.hypot(eu, ev);
+    dq = Math.max(dq, ((u - au) * ev - (v - av) * eu) / l);
+  }
+  // The part in the rail: a rectangle rounded at the back.
+  const uc = (h.drop + h.u1) / 2, hu = (h.u1 - h.drop) / 2;
+  const r = u > uc ? h.rb : 0;
+  const qx = Math.abs(u - uc) - hu + r, qy = Math.abs(v) - h.wb + r;
+  const dr = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  return Math.min(dq, dr) - g;
 }
 
-/** A hole's edge grown by g, counter-clockwise. */
-function holePoints(h: Hole, g = 0, n = 16): THREE.Vector2[] {
-  const { u0, u1 } = h, w = h.w + g, rn = h.rn + g, rb = h.rb + g;
-  const arcs: Array<[number, number, number, number]> = [
-    [u1 + g - rb, -w + rb, rb, -Math.PI / 2],
-    [u1 + g - rb, w - rb, rb, 0],
-    [u0 - g + rn, w - rn, rn, Math.PI / 2],
-    [u0 - g + rn, -w + rn, rn, Math.PI],
-  ];
+/** A hole's edge grown by g, counter-clockwise, traced outward from a point inside it. */
+function holePoints(h: Hole, g = 0, n = 240): THREE.Vector2[] {
   const pts: THREE.Vector2[] = [];
-  for (const [cu, cv, r, a0] of arcs) {
-    for (let i = 0; i <= n; i++) {
-      const a = a0 + (i / n) * (Math.PI / 2);
-      const u = cu + Math.cos(a) * r, v = cv + Math.sin(a) * r;
-      pts.push(new THREE.Vector2(h.cx + u * h.ux - v * h.uy, h.cy + u * h.uy + v * h.ux));
-    }
+  const at = (u: number, v: number) => new THREE.Vector2(h.cx + u * h.ux - v * h.uy, h.cy + u * h.uy + v * h.ux);
+  const out = (u: number, v: number) => { const q = at(u, v); return holeDist(h, q.x, q.y, g) > 0; };
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, cu = Math.cos(a), cv = Math.sin(a);
+    let hiT = 0.002;
+    while (!out(h.mid + cu * hiT, cv * hiT)) hiT += 0.002;
+    let loT = hiT - 0.002;
+    for (let k = 0; k < 24; k++) { const m = (loT + hiT) / 2; if (out(h.mid + cu * m, cv * m)) hiT = m; else loT = m; }
+    pts.push(at(h.mid + cu * hiT, cv * hiT));
   }
   return pts;
 }
