@@ -723,7 +723,9 @@ canvas.addEventListener("pointerdown", (e) => {
   sound.unlock();
   if (state !== "aim" || watching()) return;
   canvas.setPointerCapture(e.pointerId);
-  if (e.pointerType === "mouse" && e.button === 2) { power = 0; setPowerUI(0); mouseDown = null; return; }
+  // The right button opens the spin pad (a press during a pull cancels it, in pointermove: a second button
+  // pressed while one is down arrives there, not here).
+  if (e.pointerType === "mouse" && e.button === 2) { spinPad.hidden = false; return; }
   if (ruled() && onEight(game, balls)) {
     const pk = pocketNear(e.clientX, e.clientY);
     if (pk >= 0) { called = pk; calledByUser = true; toast("8 called"); return; }
@@ -746,6 +748,7 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   if (e.pointerType === "mouse") {
+    if (mouseDown && e.button === 2) { mouseDown = null; power = 0; setPowerUI(0); guideDirty = true; return; } // right button: no shot
     if (mouseDown) {
       // Power: how far the mouse has moved from where it was pressed, in any direction, so there is always room.
       // Back near the press point means no shot.
@@ -833,6 +836,7 @@ spinBtn.addEventListener("click", () => { spinPad.hidden = false; });
 $("#spin-done").addEventListener("click", () => { spinPad.hidden = true; });
 $("#spin-reset").addEventListener("click", () => setTip(0, 0));
 spinPad.addEventListener("pointerdown", (e) => { if (e.target === spinPad) spinPad.hidden = true; });
+spinPad.addEventListener("contextmenu", (e) => e.preventDefault()); // a second right-click closes it, no browser menu
 pad.addEventListener("pointerdown", (e) => {
   pad.setPointerCapture(e.pointerId);
   const set = (ev: PointerEvent) => {

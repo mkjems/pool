@@ -112,6 +112,39 @@ await scenario("mouse: aim follows the pointer; press, drag, release shoots", as
   check(!b1.on || Math.hypot(b1.x - 0.3, b1.y - 0.2) > 0.05, "the shot hit ball 1");
 });
 
+await scenario("mouse: right-click opens the spin pad; right button during a pull cancels the shot", async (open) => {
+  const p = await open();
+  await p.click("[data-mode=practice]");
+  await pool(p, () => window.__pool.place([[0, -0.5, 0], [1, 0.3, 0.2]]));
+  const t = await screen(p, 0.3, 0.2);
+  await p.mouse.move(t.x, t.y, { steps: 5 });
+  await p.mouse.click(t.x, t.y, { button: "right" });
+  check(await p.isVisible("#spin-pad"), "right-click opens the spin pad");
+  // Drag on the pad to the upper left: the dot on the spin button follows.
+  const r = await p.locator("#spin-pad .pad").boundingBox();
+  await p.mouse.move(r.x + r.width * 0.5, r.y + r.height * 0.5);
+  await p.mouse.down();
+  await p.mouse.move(r.x + r.width * 0.3, r.y + r.height * 0.3, { steps: 5 });
+  await p.mouse.up();
+  const dot = await p.evaluate(() => { const s = document.querySelector("#spin .dot").style; return [parseFloat(s.left), parseFloat(s.top)]; });
+  check(dot[0] < 45 && dot[1] < 45, "dragging on the pad sets the spin", JSON.stringify(dot));
+  // A second right-click, on the dimmed table around the pad, closes it.
+  await p.mouse.click(5, r.y + r.height / 2, { button: "right" });
+  check(await p.isHidden("#spin-pad"), "right-clicking beside the pad closes it");
+  // Pull for power, press the right button too: no shot.
+  const before = await pool(p, () => window.__pool.balls());
+  await p.mouse.move(t.x, t.y);
+  await p.mouse.down();
+  await p.mouse.move(t.x - 200, t.y - 160, { steps: 10 });
+  await p.mouse.down({ button: "right" });
+  await p.mouse.up({ button: "right" });
+  await p.mouse.up();
+  await p.waitForTimeout(300);
+  const after = await pool(p, () => window.__pool.balls());
+  check((await pool(p, () => window.__pool.state())) === "aim" && after[0].x === before[0].x && after[0].y === before[0].y, "the right button cancels the pull");
+  check(await p.isHidden("#spin-pad"), "the cancelling press does not open the pad");
+});
+
 await scenario("touch: a tap aims, the power bar shoots", async (open) => {
   const p = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   await p.click("[data-mode=practice]");
