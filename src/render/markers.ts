@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { R } from "../sim/constants";
-import { CAP_TOP, openingCircle } from "./table";
+import { RIM_TOP, openingCircle } from "./table";
 
 export class Markers {
   private rings: THREE.Mesh[] = [];
@@ -58,7 +58,7 @@ export class Markers {
     this.call.visible = pocket !== null;
     if (pocket === null) return;
     const c = openingCircle(pocket);
-    this.call.position.set(c.x, c.y, CAP_TOP + 0.002);
+    this.call.position.set(c.x, c.y, RIM_TOP + 0.002);
     this.call.scale.setScalar(c.r);
     this.callMat.opacity = 0.65 + 0.3 * Math.sin(time * 4);
   }

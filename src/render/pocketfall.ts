@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { R, TABLE_L, TABLE_W } from "../sim/constants";
 import { TABLE, type Segment } from "../sim/table";
-import { CAP_TOP, CUSHION_H, CUSHION_W, OPENINGS } from "./table";
+import { RIM_TOP, CUSHION_H, CUSHION_W, OPENINGS } from "./table";
 
 const G = 9.81;
 const SUB = 1 / 2000; // the fall's own step
@@ -83,15 +83,15 @@ export class Fall {
     } else {
       // The pocket's wall, as a profile in (distance from the opening's axis, height). It is straight down below
       // the cloth. On the cloth side of the pocket it ends at the lip; under the rails the facing goes on up to
-      // the cap, leaning in over the hole as real facings do, so a ball riding up it is turned back down.
+      // the lip, leaning in over the hole as real facings do, so a ball riding up it is turned back down.
       const ux = ex / Math.max(ed, 1e-9), uy = ey / Math.max(ed, 1e-9);
       const qx = cx + ux * o.r, qy = cy + uy * o.r;
       const underRail = Math.abs(qx) > HL - 1e-4 || Math.abs(qy) > HW - 1e-4;
       // Closest point of the profile to the ball's centre (rho = ed, z = p.z).
       let cr = o.r, cz = Math.min(p.z, 0);
       if (underRail && p.z > 0) {
-        // The leaning part, from (r, 0) to (r - LEAN * CAP_TOP, CAP_TOP).
-        const lx = -LEAN * CAP_TOP, lz = CAP_TOP, ll = lx * lx + lz * lz;
+        // The leaning part, from (r, 0) to (r - LEAN * RIM_TOP, RIM_TOP).
+        const lx = -LEAN * RIM_TOP, lz = RIM_TOP, ll = lx * lx + lz * lz;
         const t = Math.max(0, Math.min(1, ((ed - o.r) * lx + p.z * lz) / ll));
         cr = o.r + lx * t; cz = lz * t;
       }

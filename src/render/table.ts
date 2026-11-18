@@ -9,8 +9,10 @@ export const CUSHION_W = 0.05; // nose to wood
 export const RAIL_W = 0.07; // wood
 export const CUSHION_H = 0.038;
 export const WOOD_H = 0.046;
-/** Top of the metal pocket caps. */
-export const CAP_TOP = WOOD_H + 0.004;
+/** Top of the leather lip round each pocket, just proud of the wood. */
+export const RIM_TOP = WOOD_H + 0.001;
+/** Width of that lip where it shows, between the hole and the wood. */
+const RIM_W = 0.012;
 const HL = TABLE_L / 2, HW = TABLE_W / 2;
 
 export const CLOTHS = {
@@ -85,21 +87,6 @@ function woodTexture() {
   });
 }
 
-function brushedTexture() {
-  // Fine streaks along x: each row of pixels a little lighter or darker, with a faint grain inside the row.
-  return noiseTexture(256, (g, img) => {
-    const d = img.data;
-    const rows = Array.from({ length: 256 }, () => Math.random());
-    for (let i = 0; i < d.length; i += 4) {
-      const p = i / 4, y = (p / 256) | 0;
-      const v = 200 + (rows[y] - 0.5) * 60 + (Math.random() - 0.5) * 14;
-      d[i] = d[i + 1] = d[i + 2] = v;
-      d[i + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-  });
-}
-
 /**
  * Adds the lamp shadows of every ball to a standard material, computed exactly per pixel, and the lamps' pools of
  * light. `direct` scales the overhead light's mirror reflection (seen straight from above it washes out metal).
@@ -162,10 +149,9 @@ float ballShadow(vec3 p) {
   m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}-${direct}`;
 }
 
-/** A pocket's opening seen from above: a capsule from the hole's centre a little way out into the rail. */
+/** A pocket's opening in the physics, seen from above: a capsule across the mouth (src/sim/table.ts). */
 interface Opening { ax: number; ay: number; bx: number; by: number; r: number }
 
-/** The pocket openings, from the physics (src/sim/table.ts): the bed, wood, caps and cups are all cut by them. */
 export const OPENINGS: Opening[] = TABLE.pockets.map((p) => p.opening);
 
 /** A circle around a pocket's opening (for the called-pocket ring). */
@@ -175,31 +161,60 @@ export function openingCircle(pocket: number): { x: number; y: number; r: number
   return { x: (o.ax + o.bx) / 2, y: (o.ay + o.by) / 2, r: o.r + half };
 }
 
-function insideOpening(o: Opening, x: number, y: number): boolean {
-  const dx = o.bx - o.ax, dy = o.by - o.ay;
-  const t = Math.max(0, Math.min(1, ((x - o.ax) * dx + (y - o.ay) * dy) / (dx * dx + dy * dy)));
-  const ex = x - o.ax - dx * t, ey = y - o.ay - dy * t;
-  return ex * ex + ey * ey < o.r * o.r;
+/**
+ * The hole as drawn: a rectangle in the pocket's own frame (u into the pocket, v across it), straight across
+ * between the jaws with small rounded corners, round at the back. Its near edge is the physics capsule's, the drop
+ * line. At the corners it holds the whole capsule; at the sides the back is drawn a little shallower, so wood is
+ * left behind it (the ball's fall treats that part as under the rail's overhang, see pocketfall.ts). The same for
+ * every pocket of a kind, so all four corners match.
+ */
+interface Hole { cx: number; cy: number; ux: number; uy: number; u0: number; u1: number; w: number; rn: number; rb: number }
+
+const HOLES: Hole[] = TABLE.pockets.map((p) => {
+  const o = p.opening;
+  const half = Math.hypot(o.bx - o.ax, o.by - o.ay) / 2;
+  const corner = p.kind === "corner";
+  const u1 = corner ? o.r : o.r - 0.016;
+  return {
+    cx: (o.ax + o.bx) / 2, cy: (o.ay + o.by) / 2, ux: p.ux, uy: p.uy,
+    u0: -o.r, u1, w: half + o.r, rn: corner ? 0.022 : 0.02, rb: corner ? o.r : (u1 + o.r) / 2 - 0.001,
+  };
+});
+
+/** Signed distance from (x, y) to a hole's edge grown by g (negative inside). */
+function holeDist(h: Hole, x: number, y: number, g: number): number {
+  const dx = x - h.cx, dy = y - h.cy;
+  const u = dx * h.ux + dy * h.uy, v = -dx * h.uy + dy * h.ux;
+  const uc = (h.u0 + h.u1) / 2, hu = (h.u1 - h.u0) / 2;
+  const r = u > uc ? h.rb : h.rn;
+  const qx = Math.abs(u - uc) - hu + r, qy = Math.abs(v) - h.w + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r - g;
 }
 
-function capsulePoints(o: Opening, n = 40): THREE.Vector2[] {
-  const a = Math.atan2(o.by - o.ay, o.bx - o.ax);
+/** A hole's edge grown by g, counter-clockwise. */
+function holePoints(h: Hole, g = 0, n = 16): THREE.Vector2[] {
+  const { u0, u1 } = h, w = h.w + g, rn = h.rn + g, rb = h.rb + g;
+  const arcs: Array<[number, number, number, number]> = [
+    [u1 + g - rb, -w + rb, rb, -Math.PI / 2],
+    [u1 + g - rb, w - rb, rb, 0],
+    [u0 - g + rn, w - rn, rn, Math.PI / 2],
+    [u0 - g + rn, -w + rn, rn, Math.PI],
+  ];
   const pts: THREE.Vector2[] = [];
-  for (let i = 0; i <= n; i++) {
-    const t = a - Math.PI / 2 + (i / n) * Math.PI;
-    pts.push(new THREE.Vector2(o.bx + Math.cos(t) * o.r, o.by + Math.sin(t) * o.r));
-  }
-  for (let i = 0; i <= n; i++) {
-    const t = a + Math.PI / 2 + (i / n) * Math.PI;
-    pts.push(new THREE.Vector2(o.ax + Math.cos(t) * o.r, o.ay + Math.sin(t) * o.r));
+  for (const [cu, cv, r, a0] of arcs) {
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (i / n) * (Math.PI / 2);
+      const u = cu + Math.cos(a) * r, v = cv + Math.sin(a) * r;
+      pts.push(new THREE.Vector2(h.cx + u * h.ux - v * h.uy, h.cy + u * h.uy + v * h.ux));
+    }
   }
   return pts;
 }
 
-/** The wood's inner edge: the rectangle behind the cushions joined with the pocket openings (counter-clockwise). */
+/** The wood's inner edge: the rectangle behind the cushions joined with the pockets' lips (counter-clockwise). */
 function railInnerContour(): THREE.Vector2[] {
   const rx = HL + CUSHION_W, ry = HW + CUSHION_W;
-  const inside = (x: number, y: number) => OPENINGS.some((o) => insideOpening(o, x, y));
+  const inside = (x: number, y: number) => HOLES.some((h) => holeDist(h, x, y, RIM_W) < 0);
   const pts: THREE.Vector2[] = [];
   const N = 4096;
   for (let i = 0; i < N; i++) {
@@ -270,7 +285,7 @@ export function makeTable(): TableView {
   const bedShape = new THREE.Shape();
   const bx = HL + CUSHION_W + 0.06, by = HW + CUSHION_W + 0.06;
   bedShape.moveTo(-bx, -by); bedShape.lineTo(bx, -by); bedShape.lineTo(bx, by); bedShape.lineTo(-bx, by);
-  for (const o of OPENINGS) bedShape.holes.push(new THREE.Path(capsulePoints(o)));
+  for (const h of HOLES) bedShape.holes.push(new THREE.Path(holePoints(h)));
   const bedGeo = new THREE.ShapeGeometry(bedShape, 24);
   const clothTex = clothTexture();
   // UVs in metres: one weave tile per 12 cm.
@@ -307,7 +322,7 @@ export function makeTable(): TableView {
 
   // Wood rails, lacquered.
   const X0 = HL + CUSHION_W + RAIL_W, Y0 = HW + CUSHION_W + RAIL_W;
-  const rail = roundedRect(X0, Y0, 0.03);
+  const rail = roundedRect(X0, Y0, 0.045);
   const inner = railInnerContour();
   rail.holes.push(new THREE.Path(inner.slice().reverse()));
   const railGeo = new THREE.ExtrudeGeometry(rail, {
@@ -333,8 +348,8 @@ export function makeTable(): TableView {
   const cupMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.95, side: THREE.DoubleSide });
   const hidden = new THREE.MeshBasicMaterial({ visible: false });
   const black = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  for (const o of OPENINGS) {
-    const shape = new THREE.Shape(capsulePoints(o));
+  for (const h of HOLES) {
+    const shape = new THREE.Shape(holePoints(h));
     const cup = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.14, bevelEnabled: false }), [hidden, cupMat]);
     cup.position.z = -0.14;
     group.add(cup);
@@ -343,37 +358,24 @@ export function makeTable(): TableView {
     group.add(bottom);
   }
 
-  // Metal caps: an L round each corner and a plate over each side pocket, cut from the rail's own outline so the
-  // pocket openings run through them. Their bevel reaches as far as the wood's, covering its edge.
-  const brushed = brushedTexture();
-  brushed.repeat.set(1.5, 4);
-  const metalMat = new THREE.MeshStandardMaterial({ color: 0xbabec4, metalness: 1, roughness: 0.36, map: brushed });
-  metalMat.userData.env = 0.3;
-  withBallShadows(metalMat, shadowBalls, 0.5, false, 0.12);
-  // The outline in steps of a few millimetres, so every cap finds its stretch of it.
-  const outer: THREE.Vector2[] = [];
-  const corners = rail.getPoints(24);
-  for (let i = 0; i < corners.length; i++) {
-    const a = corners[i], b = corners[(i + 1) % corners.length];
-    const k = Math.ceil(a.distanceTo(b) / 0.004);
-    for (let j = 0; j < k; j++) outer.push(a.clone().lerp(b, j / k));
-  }
-  const capShapes: THREE.Shape[] = [];
-  const ARM = 0.19, PLATE = 0.105;
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-    const f = (p: THREE.Vector2) => Math.min(sx * p.x - (X0 - ARM), sy * p.y - (Y0 - ARM));
-    capShapes.push(new THREE.Shape(runInside(inner, f).concat(runInside(outer, f).reverse())));
-  }
-  for (const sy of [-1, 1]) {
-    const f = (p: THREE.Vector2) => Math.min(PLATE - Math.abs(p.x), sy * p.y);
-    capShapes.push(new THREE.Shape(runInside(inner, f).concat(runInside(outer, f).reverse())));
-  }
-  const capGeo = new THREE.ExtrudeGeometry(capShapes, {
-    depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.006, bevelSegments: 4, curveSegments: 8,
-  });
-  const caps = new THREE.Mesh(capGeo, metalMat);
-  caps.position.z = CAP_TOP - 0.01;
-  group.add(caps);
+  // Leather lips: where a hole cuts into the wood, a band of leather round it, just proud of the wood.
+  const leather = new THREE.MeshStandardMaterial({ color: 0x8a5a38, roughness: 0.6, metalness: 0 });
+  leather.userData.env = 0.04;
+  withBallShadows(leather, shadowBalls, 0.5, false);
+  const behindCushions = (p: THREE.Vector2) => Math.max(Math.abs(p.x) - (HL + CUSHION_W), Math.abs(p.y) - (HW + CUSHION_W));
+  const lipShapes = HOLES.map((h) =>
+    new THREE.Shape(runInside(holePoints(h, RIM_W), behindCushions).concat(runInside(holePoints(h), behindCushions).reverse())),
+  );
+  const LIP_BOTTOM = -0.012, LIP_BEVEL = 0.002;
+  const lips = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(lipShapes, {
+      depth: RIM_TOP - LIP_BOTTOM - 2 * LIP_BEVEL, bevelEnabled: true, bevelThickness: LIP_BEVEL, bevelSize: LIP_BEVEL,
+      bevelSegments: 3, curveSegments: 8,
+    }),
+    leather,
+  );
+  lips.position.z = LIP_BOTTOM + LIP_BEVEL;
+  group.add(lips);
 
   // Sights: small round inlays of mother-of-pearl.
   const pearl = new THREE.MeshPhysicalMaterial({ color: 0xf2efe6, roughness: 0.25, clearcoat: 1, iridescence: 0.6 });

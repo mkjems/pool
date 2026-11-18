@@ -21,6 +21,10 @@ ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 a
 into the caps, with the cushion jaws pointing into them; round pearl sights; cushions a little brighter than the
 bed. 60 fps at 2560 × 1300 × 2 (headless Chromium). The user: "the new table is great, the caps are great",
 asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green cloth stays the default.
+**18 November: the caps are gone again.** The user found their cut-outs uneven (they were cut from the rail's
+outline, so each corner's two sides differed) and too fussy, and sent a drawing: a plain wooden frame, each hole
+square across between the jaws with small rounded corners and round at the back, a leather lip where it cuts into
+the wood. Done that way (`HOLES` in `src/render/table.ts`); all four corners and both sides now match.
 
 **Asked for:**
 
@@ -53,7 +57,8 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
 - Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
   No rolling sound: the noise-based one sounded like a sea breeze.
 - Improvement ideas: try them and keep what works.
-- Green cloth is the default (teal stays an option on the Cloth button). Slim rails with brushed metal caps.
+- Green cloth is the default (teal stays an option on the Cloth button). Slim plain wooden rails, no metal
+  caps (18 November: "unnecessarily complicated"); pockets as in the user's drawing, with a leather lip.
 - 18 November: friend matches work for the user in two browsers. **Get the basics working first, before new
   features** (no emotes, shot clock or other extras until the user asks).
 
@@ -284,7 +289,7 @@ A fingertip covers three balls, so nothing on a phone requires touching a ball.
 - **Shadows:** computed exactly in the cloth's shader from the ball positions (a sphere over a plane has a
   closed formula). Soft, sharp at every size, cheap on phones, no shadow maps.
 - **Cloth:** fine weave, slight variation, pools of light from three lamps fading towards the rails.
-- **Table:** wooden rails with inlaid sights, cloth-covered cushions, leather pockets, metal corners. Geometry
+- **Table:** wooden rails with inlaid sights, cloth-covered cushions, pockets with a leather lip. Geometry
   made in code.
 - **Cue:** a 3D cue with its shadow, a stroke animation, a puff of chalk.
 - **Finish:** filmic tone mapping, a little glow on highlights, a dark room around the table.
@@ -548,9 +553,13 @@ Sizes are relative: S, M, L.
       pixels). Now one directional light, the lamp pools painted in the cloth shader, lamp reflections from the
       environment map only on the balls: 60 fps at 2×. Resolution drops by itself if frames get slow.
       Balls are drawn between the last two physics steps, so their motion is even at any frame rate.
-      Rails and caps (17 November): the pocket openings (`OPENINGS` in `src/render/table.ts`) are drawn only,
-      not physics; bed, wood, caps and cups are all cut from them. Flat metal seen from straight above mirrors
-      the overhead light and goes white: its direct reflection is scaled down in the shader (`direct`).
+      Rails and caps (17 November): flat metal seen from straight above mirrors the overhead light and goes
+      white: its direct reflection is scaled down in the shader (`direct`). The caps were removed on 18
+      November. The holes as drawn (`HOLES` in `src/render/table.ts`): a rectangle in each pocket's own frame,
+      straight across between the jaws with small rounded corners, round at the back; bed and cups are cut by
+      it, the wood by it grown by the leather lip (`RIM_W`). Its near edge is the physics capsule's (the drop
+      line). Corners hold the whole capsule; side holes are drawn 16 mm shallower than the capsule so wood is
+      left behind them, the fall's leaning facing keeps a ball out of that part.
       Pocket drops (17 November): the physics hands over the ball's position, velocity and spin (new fields on
       the pocket event) and `Fall` plays it out in 3D at 2000 steps a second with gravity, restitution and
       friction with spin: the lip of the bed, the jaws, and the facing under the rail, which leans in over
