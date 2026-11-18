@@ -12,7 +12,8 @@
     "engines": "node tests/engines.mjs",
     "bench": "node tests/bench.mjs",
     "selfplay": "node tests/selfplay.mjs",
-    "serve": "npm run build && node server/server.mjs"
+    "serve": "npm run build && node server/server.mjs",
+    "browser": "node tests/browser.mjs"
   },
   "dependencies": {
     "three": "^0.181.2",
@@ -22,6 +23,7 @@
     "@types/three": "^0.181.0",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.25.12",
+    "playwright": "^1.65.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
     "vitest": "^3.2.4"

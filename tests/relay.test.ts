@@ -49,7 +49,8 @@ describe("friend-match relay", () => {
     const { a, b, code } = await pair();
     expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}$/);
     a.send({ t: "start", id: "m1", seed: 42, breaker: 0 });
-    expect(await b.next("start")).toMatchObject({ id: "m1", seed: 42, breaker: 0 });
+    expect(await b.next("start")).toMatchObject({ id: "m1", seed: 42, breaker: 0, by: 0 });
+    expect(await a.next("start")).toMatchObject({ id: "m1", by: 0 }); // the sender gets it too: both begin on it
     a.send({ t: "aim", x: 1, y: 0 });
     expect(await b.next("aim")).toMatchObject({ x: 1 });
     b.send({ t: "shot", id: "m1", n: 1, shot: { speed: 3 } });

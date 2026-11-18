@@ -16,7 +16,7 @@ export type FromRelay =
   | { t: "joined"; names: [string, string] }
   | { t: "names"; names: [string, string] }
   | { t: "catchup"; code: string; seat: Player; names: [string, string]; start: Start | null; last: ShotMsg | null; present: boolean }
-  | ({ t: "start" } & Start)
+  | ({ t: "start"; by: Player } & Start)
   | ShotMsg
   | AimMsg
   | { t: "left" | "back" | "gone"; seat: Player }

@@ -12,7 +12,7 @@
 //   from a player  host {name, v} · join {code, name, v} · rejoin {code, seat, key, v} · name {name} · bye
 //                  start {id, seed, breaker} · shot {id, n, ...} · aim {...} (passed on, not kept) · ping
 //   to a player    room {code, seat, key, names} · joined {names} · names {names} · catchup {code, seat, names,
-//                  start, last} · start/shot/aim (the other's) · left {seat} · back {seat} · gone {seat} (left
+//                  start, last} · start {by, ...} (to both) · shot/aim (the other's) · left {seat} · back {seat} · gone {seat} (left
 //                  for good) · reload (the other runs a newer version) · error {message} · pong
 
 import { randomBytes } from "node:crypto";
@@ -94,9 +94,10 @@ export function attachRelay(server, { delay = 0 } = {}) {
         room.names[seat] = clean(m.name);
         for (const s of room.seats) send(s, { t: "names", names: room.names });
       } else if (m.t === "start") {
+        // To both players, the sender too: they begin a match only on this, so they always agree on which.
         room.start = { id: String(m.id), seed: Number(m.seed) | 0, breaker: m.breaker === 1 ? 1 : 0 };
         room.last = null;
-        send(other(), { t: "start", ...room.start });
+        for (const s of room.seats) send(s, { t: "start", by: seat, ...room.start });
       } else if (m.t === "shot") {
         if (!room.start || m.id !== room.start.id) return; // a late shot from an earlier match
         room.last = m;

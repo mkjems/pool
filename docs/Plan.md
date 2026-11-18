@@ -53,6 +53,8 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
   No rolling sound: the noise-based one sounded like a sea breeze.
 - Improvement ideas: try them and keep what works.
 - Green cloth is the default (teal stays an option on the Cloth button). Slim rails with brushed metal caps.
+- 18 November: friend matches work for the user in two browsers. **Get the basics working first, before new
+  features** (no emotes, shot clock or other extras until the user asks).
 
 **Sound, done 17 November, to judge by ear:** every sound rebuilt (`src/audio/sound.ts`), each event heard at
 its own moment in the simulation, a volume button, room sound in the menu, vibration on Android. See phase 5.
@@ -72,16 +74,24 @@ rejoins, keep-alive, remembers the seat for reloads), and the online mode in `sr
 friend online", join by code), invite card (link, copy, share), live aiming, shots carrying the shooter's exact
 position and game, re-rack and cue respawn seeded alike, "away" banner, leave, rematch. `tests/relay.test.ts`;
 two-browser runs through the dev server (pair, 6 shots identical on both sides, reload mid-match, rematch,
-dropout banner, leave) all passed. Left to do: the user trying it on two devices; emotes and an optional shot
-clock; a committed browser test for matches (the scratch scripts were `match.mjs` and `flows.mjs`: two
-Playwright contexts on `?test`, driving `__pool`); then deploying (phase 8, ask first: GitHub repository,
-Dockerfile, the VPS).
+dropout banner, leave) all passed. 18 November: the user played two browsers against each other, fine. Then
+deploying (phase 8, ask first: GitHub repository, Dockerfile, the VPS).
 
-**Next steps, in order unless the user says otherwise:** finish friend matches (above); the sounds are
+**Bug hunt and browser tests, 18 November** (the user chose this from: bug hunt, phone play, putting it online,
+polish). `npm run browser` (`tests/browser.mjs`): 13 scenarios with real mouse and touch input and two-player
+matches through the relay. Bugs found and fixed, each with a scenario that fails without the fix: pressing
+Rematch at the same moment on both sides put the two browsers on different matches (now the relay sends every
+start to both, and a browser begins a match only on the relay's start); the delayed re-rack, practice re-rack
+and game-over card fired after the player had gone to the menu (now cancelled). The rules engine read against
+docs/Rules.md: no faults. The computer's break: 3% illegal, 5.5% scratches, 38% pot (200 racks).
+
+**Next steps, in order unless the user says otherwise:** ask the user what's next among the basics left
+(phone play, putting it online unlisted); the sounds are
 "fine for now" (they will look for recordings later); then the cinematic break and replay (phase 6), friend matches
 (phase 7), and the homepage (phase 8). Smaller open items: the loupe for touch aiming, the readability
 measurement of stripes from many angles, browser tests with real mouse and touch events (the labels layer once
-swallowed all input and the code-driven tests did not notice), characters for the computer, and banks and
+swallowed all input and the code-driven tests did not notice; done 18 November: `npm run browser`),
+characters for the computer, and banks and
 kicks in its planning.
 
 **How to check the look and speed.** Run the dev server, open `http://localhost:5173/?test` in the Playwright

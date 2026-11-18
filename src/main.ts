@@ -181,6 +181,10 @@ function connect(l: Link) {
 }
 
 function showInvite(text: string, code: string | null) {
+  // Whatever was on the table stops (the computer must not play on behind the card).
+  state = "menu";
+  cpu = null;
+  guide.hide();
   $("#menu").hidden = true;
   $("#invite").hidden = false;
   $("#invite-text").textContent = text;
@@ -214,11 +218,14 @@ function leaveOnline() {
   netBanner(null);
 }
 
-/** A new match (the first, or a rematch): its rack seed and breaker go to the friend, and both start it. */
+/**
+ * A new match (the first, or a rematch). Its rack seed and breaker go to the relay, which sends every start to
+ * both players; each begins a match only when the relay's start arrives. So if both press Rematch at once, both
+ * end on the same match: the one the relay passed on last.
+ */
 function newMatch(first: Player) {
-  const m: Start = { id: Math.random().toString(36).slice(2, 10), seed: (Math.random() * 1e9) | 0, breaker: first };
-  link?.send({ t: "start", ...m });
-  beginMatch(m);
+  if (!link || link.status !== "open") { toast("Reconnecting. Try again in a moment."); return; }
+  link.send({ t: "start", id: Math.random().toString(36).slice(2, 10), seed: (Math.random() * 1e9) | 0, breaker: first });
 }
 
 function beginMatch(m: Start) {
@@ -263,7 +270,7 @@ function onNet(m: FromRelay) {
       awayBanner();
       break;
     case "start":
-      friendHere = true;
+      if (m.by !== seat) friendHere = true;
       beginMatch(m);
       break;
     case "shot":
@@ -365,7 +372,16 @@ function resetViews() {
   for (const v of ballViews) { v.fall = null; v.mesh.visible = true; }
 }
 
+/** Something the game does a moment after a shot (re-rack, the game-over card). Going to the menu or starting
+ * another game cancels it. */
+let laterTimer = 0;
+function later(fn: () => void, ms: number) {
+  clearTimeout(laterTimer);
+  laterTimer = window.setTimeout(fn, ms);
+}
+
 function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0) {
+  clearTimeout(laterTimer);
   mode = m;
   cpu = null;
   if (mode !== "online") names = mode === "cpu" ? ["You", "Computer"] : ["Player 1", "Player 2"];
@@ -479,7 +495,7 @@ function endOfShot() {
 
   if (mode === "practice") {
     if (!balls[0].on) { toast("Scratch: drag the cue ball to place it"); respawnCue(); }
-    if (balls.slice(1).every((b) => !b.on)) { toast("Table cleared!"); setTimeout(() => startGame("practice"), 1600); }
+    if (balls.slice(1).every((b) => !b.on)) { toast("Table cleared!"); later(() => startGame("practice"), 1600); }
     return;
   }
 
@@ -493,7 +509,7 @@ function endOfShot() {
     toast(v.message);
     // Online both browsers re-rack alike: the seed follows from the match.
     const seed = match ? (match.seed + shotNo * 7919) | 0 : undefined;
-    setTimeout(() => startGame(mode, game.turn, seed), 1800);
+    later(() => startGame(mode, game.turn, seed), 1800);
     return;
   }
   if (game.winner !== null) {
@@ -501,7 +517,7 @@ function endOfShot() {
     updateScore();
     const mine = mode === "cpu" ? game.winner === 0 : mode === "online" && game.winner === seat;
     const title = mine ? "You win!" : mode === "cpu" ? "The computer wins" : `${names[game.winner]} wins`;
-    setTimeout(() => showOver(title, v.message, true), 900);
+    later(() => showOver(title, v.message, true), 900);
     return;
   }
   if (!balls[0].on) respawnCue();
@@ -834,10 +850,12 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("#menu [data-mode]"
   b.addEventListener("click", () => { sound.unlock(); startGame(b.dataset.mode as Mode); });
 }
 function showMenu() {
-  if (mode === "online" && link) {
-    if (game.winner === null && match && !confirm(`Leave the match with ${names[1 - seat]}?`)) return;
+  // Connected to a friend (playing, or still waiting for them): the menu leaves the match.
+  if (link) {
+    if (mode === "online" && match && game.winner === null && !confirm(`Leave the match with ${names[1 - seat]}?`)) return;
     leaveOnline();
   }
+  clearTimeout(laterTimer);
   state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; $("#invite").hidden = true; guide.hide();
 }
 function showOver(title: string, why: string, rematch: boolean) {
@@ -1087,7 +1105,7 @@ if (new URLSearchParams(location.search).has("test")) {
     shoot: (p: number) => shoot(p),
     labels: (on: boolean) => { labels = on; },
     quality: () => view.quality,
-    online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names }),
+    online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names, queued: remoteShots.length }),
     timeScale: (k: number) => { timeScale = k; },
     step: (seconds: number) => { manualTime += seconds; },
     falls: () => ballViews.filter((v) => v.fall).map((v) => ({ id: v.id, target: v.fall!.target, z: v.fall!.p.z, done: v.fall!.done })),
