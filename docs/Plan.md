@@ -551,7 +551,8 @@ Sizes are relative: S, M, L.
       the single ball click is made duller for soft hits (low-pass 3 kHz × 7^v), pitch varies ±3-5%. Hardest
       hits peak where the synthetic ones did. Still synthetic: cushion, rattle, miscue. The synthetic run
       down the return (and its clack at the end) is off while the pocket recording plays: "very annoying"
-      (18 November); it waits for a recording. Sources and licences of the recordings: to ask the user.
+      (18 November); it waits for a recording. The user likes the other synthetic sounds; the cushion made a little
+      darker (contact 3.5 → 4.2 ms, the 1 kHz ring halved, click a third, noise low-pass 2000 → 1100 Hz). Sources and licences of the recordings: to ask the user.
 - [x] Rolling sound, reverb, room tone, vibration, volume settings.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than

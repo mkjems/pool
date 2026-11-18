@@ -274,18 +274,19 @@ export class Sound {
     v *= this.allow(at, v);
     if (v === 0) return;
     // Rubber gives: a few milliseconds of contact, a soft thump. The wooden rail rings under it, and the ball
-    // itself gives a faint click where it meets the cloth on the nose.
-    const tau = 0.0035 * Math.pow(Math.max(speed, 0.1), -0.15);
+    // itself gives a faint click where it meets the cloth on the nose. Darker on 18 November (the user): a
+    // longer contact, less of the rail's upper ring, the click and the noise turned down; the body unchanged.
+    const tau = 0.0042 * Math.pow(Math.max(speed, 0.1), -0.15);
     const p = rand(0.94, 1.06);
     const buf = this.render({
       pulse: tau, amp: 1.0 * v,
       modes: [
         { f: 185 * p, a: 0.3 * v, d: 0.045 },
         { f: 420 * p, a: 0.26 * v, d: 0.03 },
-        { f: 1050 * p, a: 0.1 * v, d: 0.015 },
-        { f: 3900 * p, a: 0.06 * v * v, d: 0.003 },
+        { f: 1050 * p, a: 0.05 * v, d: 0.012 },
+        { f: 3900 * p, a: 0.02 * v * v, d: 0.003 },
       ],
-      noise: { a: 0.1 * v, d: 0.012, lp: 2000 },
+      noise: { a: 0.07 * v, d: 0.012, lp: 1100 },
     }, 0.25);
     this.play(buf, at, this.pan(x), Sound.LEVEL.cushion);
   }
