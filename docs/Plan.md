@@ -4,7 +4,7 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 7, friend matches: working locally (17 November), not yet tried by the user, not deployed.
+**Current phase:** 8, on the homepage. The game is online at https://pool.mkjems.dk (18 November), friend matches too.
 See [Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
@@ -12,8 +12,8 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 Handoff written 17 November 2026, end of the first working session. Start here.
 
-**State.** Everything is committed on `main` (local only: no GitHub repository, nothing pushed, nothing deployed;
-ask before creating the repository or pushing). 32 tests pass (`npm test`), V8 and JavaScriptCore agree
+**State.** `main` is on GitHub (`mkjems/pool`, public); every push deploys to https://pool.mkjems.dk, so ask
+before pushing. 32 tests pass (`npm test`), V8 and JavaScriptCore agree
 (`npm run engines`), `npm run selfplay` finishes every game. 60 fps at 2× on the user's Mac.
 
 **Done since the handoff, to judge:** slimmer rails with metal caps (item 1 below). Rails 0.07 m of wood
@@ -610,13 +610,14 @@ Sizes are relative: S, M, L.
 
 ### Phase 8: on the homepage (S)
 
-- [ ] Online at `pool.mkjems.dk` (18 November: prepared, not yet pushed or deployed).
+- [x] Online at `pool.mkjems.dk` (18 November). Every push to `main` on `github.com/mkjems/pool` tests, builds and deploys.
   - Here: multi-stage `Dockerfile` (build, then Node 22 with only `ws` and `dist/`), `compose.yaml` (copy of
     `/opt/pool/compose.yaml`), `.github/workflows/deploy.yml` (`npm test` and build gate the deploy; the
     browser tests need a Mac GPU, run them locally before pushing), GoatCounter in `index.html` (counts only
     on `pool.mkjems.dk`). Image built and run locally: game and relay answer.
-  - Infrastructure repository: route on 8087, `/opt/pool`, access log, committed locally. DNS already points
-    at the VPS. Still to do: GitHub repository, secrets, playbook, `/opt/pool/compose.yaml`, first push.
+  - Infrastructure repository: route on 8087, `/opt/pool`, access log (pushed, playbook applied).
+    `/opt/pool/compose.yaml` on the VPS. Secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` set.
+  - CI is slower than the Mac: the test timeout is 30 s (`vite.config.ts`).
 - [ ] Screenshot, `projects.ts`, the texts, the sitemap. Share image and description for the game itself.
 
 **Exit:** the game is the first entry on mkjems.dk.
