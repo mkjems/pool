@@ -1,9 +1,22 @@
 // The cue stick and the aim guide (paths drawn on the cloth).
 
 import * as THREE from "three";
-import { R } from "../sim/constants";
+import { R, TABLE_L, TABLE_W } from "../sim/constants";
+import { CUSHION_H, CUSHION_W, RAIL_W, RIM_TOP } from "./table";
 
-const ELEVATION = 0.12; // radians the butt is raised, to clear the rails
+// Radians the butt is raised: at least this, more when the cue ball is near a cushion so the cue clears the
+// cushion and the wood (as a player raises the butt there), up to the most a player would.
+const ELEVATION = 0.12, MAX_ELEVATION = 0.7;
+const CLEAR = 0.004; // air between the cue and the rail
+const TIP_R = 0.0064, BUTT_R = 0.0145, LENGTH = 1.5;
+
+/** Height of the cushion or wood at a point on the table, 0 on the cloth and beyond the table. */
+function railHeight(x: number, y: number): number {
+  const out = Math.max(Math.abs(x) - TABLE_L / 2, Math.abs(y) - TABLE_W / 2);
+  if (out <= 0) return 0;
+  if (out <= CUSHION_W) return CUSHION_H;
+  return out <= CUSHION_W + RAIL_W ? RIM_TOP : 0;
+}
 
 interface Part { len: number; r0: number; r1: number; mat: THREE.Material }
 
@@ -67,9 +80,18 @@ export class CueView {
     const cx = x - dx * R * 0.9 + rx * side * R;
     const cy = y - dy * R * 0.9 + ry * side * R;
     const cz = R + height * R;
-    const ch = Math.cos(ELEVATION), sh = Math.sin(ELEVATION);
+    // Walk back under the cue: wherever it passes over the cushion or the wood, raise it enough to clear them.
+    let tan = Math.tan(ELEVATION);
+    for (let t = back; t < back + LENGTH; t += 0.005) {
+      const h = railHeight(cx - dx * t, cy - dy * t);
+      if (h === 0) continue;
+      const r = TIP_R + (BUTT_R - TIP_R) * ((t - back) / LENGTH);
+      tan = Math.max(tan, (h + r + CLEAR - cz) / t);
+    }
+    const elevation = Math.min(MAX_ELEVATION, Math.atan(tan));
+    const ch = Math.cos(elevation), sh = Math.sin(elevation);
     this.group.position.set(cx - dx * back * ch, cy - dy * back * ch, cz + back * sh);
-    this.group.rotation.set(0, ELEVATION, Math.atan2(dy, dx), "ZYX");
+    this.group.rotation.set(0, elevation, Math.atan2(dy, dx), "ZYX");
     const mid = back + 0.7;
     this.shadow.position.set(cx - dx * mid * ch + 0.012, cy - dy * mid * ch - 0.012, 0.001);
     this.shadow.rotation.set(0, 0, Math.atan2(dy, dx));
