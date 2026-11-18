@@ -351,9 +351,15 @@ export class Sound {
     const v = Math.min(1, 0.4 + speed / 3);
     const at = this.when(delay);
     // The drop: onto the hard rubber at the bottom of the pocket, with a rattle off the back if it came fast.
+    // With the recording, only the recording: the synthetic rattle and run down the return were "very annoying"
+    // next to it (18 November), and stay off until there is a recording of the return.
     const rec = this.sample("pocket");
-    if (rec) this.play(rec, at, this.pan(x), Sound.SAMPLE.pocket * v, 0.8, rand(0.95, 1.04));
-    else this.play(this.render({
+    if (rec) {
+      this.play(rec, at, this.pan(x), Sound.SAMPLE.pocket * v, 0.8, rand(0.95, 1.04));
+      this.buzz(25);
+      return;
+    }
+    this.play(this.render({
       pulse: 0.0016, amp: 0.45 * v,
       modes: [
         { f: rand(170, 190), a: 0.2 * v, d: 0.05 },
