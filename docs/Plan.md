@@ -27,7 +27,8 @@ square across between the jaws with small rounded corners and round at the back,
 the wood. Done that way (`HOLES` in `src/render/table.ts`); all four corners and both sides now match.
 Then (same day) the user asked for the leather to be flush with the cushion and allowed wider wood: the hole
 now follows the cushion jaws to the backs of the cushions and goes straight on into the rail, so each jaw runs
-into the lip's inner edge; rails 0.085 m of wood (was 0.07), so the side holes have their full depth.
+into the lip's inner edge; rails 0.085 m of wood (was 0.07), so the side holes have their full depth. The
+front edge of each hole is round, never straight (the user: "that is not how pool tables look").
 
 **Asked for:**
 
@@ -560,8 +561,8 @@ Sizes are relative: S, M, L.
       white: its direct reflection is scaled down in the shader (`direct`). The caps were removed on 18
       November. The holes as drawn (`HOLES` in `src/render/table.ts`): a rectangle in each pocket's own frame,
       straight across between the jaws with small rounded corners, round at the back; bed and cups are cut by
-      it, the wood by it grown by the leather lip (`RIM_W`). Its near edge is the physics capsule's (the drop
-      line), between the jaws it follows them, behind the cushions it is as wide as the jaws end, and it is as
+      it, the wood by it grown by the leather lip (`RIM_W`). Its front edge is the physics capsule's round one
+      (its middle on the drop line), between the jaws it follows them, behind the cushions it is as wide as the jaws end, and it is as
       deep as the capsule (at the corners that must reach past where the cushion backs meet, or the lip breaks
       in two). Behind the cushions the capsule is wider than the drawn hole; the fall's leaning facing under the
       rail covers that.

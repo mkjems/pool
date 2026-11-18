@@ -163,9 +163,9 @@ export function openingCircle(pocket: number): { x: number; y: number; r: number
 
 /**
  * The hole as drawn, in the pocket's own frame (u into the pocket from the middle of the mouth, v across it):
- * from the drop line (the near edge of the physics capsule) it follows the cushion jaws to the backs of the
- * cushions, then goes straight on into the rail as wide as the jaws end, round at the back. So the jaws run
- * straight into the leather lip. The same for every pocket of a kind, so all four corners match.
+ * its front edge is the physics capsule's, round, its middle on the drop line; it follows the cushion jaws to
+ * the backs of the cushions, then goes straight on into the rail as wide as the jaws end, round at the back. So
+ * the jaws run straight into the leather lip. The same for every pocket of a kind, so all four corners match.
  */
 interface Hole {
   cx: number; cy: number; ux: number; uy: number;
@@ -173,8 +173,18 @@ interface Hole {
   quad: Array<[number, number]>;
   /** On into the rail: u from drop to u1, |v| up to wb, back corners rounded by rb. */
   drop: number; u1: number; wb: number; rb: number;
-  /** A point inside both parts, to trace the outline from. */
+  /** The capsule's front: its middle segment at u = cu, half as long as ch, radius r. */
+  cu: number; ch: number; r: number;
+  /** A point inside every part, to trace the outline from. */
   mid: number;
+}
+
+/** Signed distance to a box u0..u1 by |v| <= w, its front corners rounded by rn and its back ones by rb. */
+function roundedBox(u: number, v: number, u0: number, u1: number, w: number, rn: number, rb: number): number {
+  const uc = (u0 + u1) / 2, hu = (u1 - u0) / 2;
+  const r = u > uc ? rb : rn;
+  const qx = Math.abs(u - uc) - hu + r, qy = Math.abs(v) - w + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
 const HOLES: Hole[] = TABLE.pockets.map((p) => {
@@ -201,6 +211,7 @@ const HOLES: Hole[] = TABLE.pockets.map((p) => {
     // As deep as the physics capsule: at the corners that reaches just past where the cushions' backs meet, so
     // the lip is one piece round the back.
     drop: p.drop, u1: p.drop + 2 * o.r, wb, rb: wb * 0.9,
+    cu: p.drop + o.r, ch: Math.hypot(o.bx - o.ax, o.by - o.ay) / 2, r: o.r,
     mid: (p.drop + lo.back[0]) / 2,
   };
 });
@@ -217,11 +228,10 @@ function holeDist(h: Hole, x: number, y: number, g: number): number {
     dq = Math.max(dq, ((u - au) * ev - (v - av) * eu) / l);
   }
   // The part in the rail: a rectangle rounded at the back.
-  const uc = (h.drop + h.u1) / 2, hu = (h.u1 - h.drop) / 2;
-  const r = u > uc ? h.rb : 0;
-  const qx = Math.abs(u - uc) - hu + r, qy = Math.abs(v) - h.wb + r;
-  const dr = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
-  return Math.min(dq, dr) - g;
+  const dr = roundedBox(u, v, h.drop, h.u1, h.wb, 0, h.rb);
+  // Both cut off at the front by the capsule's round front edge.
+  const df = roundedBox(u, v, h.cu - h.r, 1, h.ch + h.r, h.r, 0);
+  return Math.max(Math.min(dq, dr), df) - g;
 }
 
 /** A hole's edge grown by g, counter-clockwise, traced outward from a point inside it. */
