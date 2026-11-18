@@ -553,7 +553,8 @@ Sizes are relative: S, M, L.
       down the return (and its clack at the end) is off while the pocket recording plays: "very annoying"
       (18 November); it waits for a recording. The user likes the other synthetic sounds; the cushion made a little
       darker, then darker again ("still too bright"): contact 3.5 → 5 ms, the 1 kHz ring and the 3.9 kHz click
-      removed, noise quieter and low-passed at 600 Hz instead of 2000. Sources and licences of the recordings: to ask the user.
+      removed, noise quieter and low-passed at 600 Hz instead of 2000. Then 20% quieter and pitched down to 0.85; its settings
+      are now in `CUSHION` at the top of `src/audio/sound.ts`, for the user to tune by ear. Sources and licences of the recordings: to ask the user.
 - [x] Rolling sound, reverb, room tone, vibration, volume settings.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than

@@ -19,6 +19,25 @@ export const VOLUMES = ["off", "low", "medium", "high"] as const;
 export type Volume = (typeof VOLUMES)[number];
 const GAIN: Record<Volume, number> = { off: 0, low: 0.3, medium: 0.6, high: 1 };
 
+/**
+ * The cushion's sound, to tune by ear: change a number, save, and `npm run dev` reloads the page with it.
+ */
+export const CUSHION = {
+  /** Loudness. 1 was the first version; 0.8 is 20% quieter. */
+  volume: 0.8,
+  /** Pitch of the whole sound. 1 was the first version; lower is deeper. Below about 0.7 phone speakers lose it. */
+  pitch: 0.85,
+  /** How long the rubber is in contact, in milliseconds: longer is softer and duller. */
+  contact: 5,
+  /** The two tones of the rail ringing under the rubber, in Hz (before pitch), and how loud each is. */
+  low: 185, lowLevel: 0.3,
+  high: 420, highLevel: 0.26,
+  /** How long they ring, in seconds. */
+  ring: 0.045,
+  /** A little noise in the thump: how much, and the highest it goes (Hz, before pitch). */
+  noise: 0.05, noiseTop: 600,
+};
+
 interface Mode { f: number; a: number; d: number }
 interface Impact {
   /** Contact pulse: duration (s) and amplitude. */
@@ -273,20 +292,20 @@ export class Sound {
     let v = Math.min(1, Math.pow(speed / 4, 0.8));
     v *= this.allow(at, v);
     if (v === 0) return;
-    // Rubber gives: a few milliseconds of contact, a soft thump, and the wooden rail rings under it.
-    // Darker twice on 18 November (the user): a longer contact, no upper ring of the rail or click of the ball,
-    // the noise low and dull; the body unchanged.
-    const tau = 0.005 * Math.pow(Math.max(speed, 0.1), -0.15);
-    const p = rand(0.94, 1.06);
+    // Rubber gives: a few milliseconds of contact, a soft thump, and the wooden rail rings under it. Tuned by the
+    // user's ear (CUSHION above): darker, quieter and lower than the first version.
+    const c = CUSHION;
+    const tau = (c.contact / 1000 / c.pitch) * Math.pow(Math.max(speed, 0.1), -0.15);
+    const p = rand(0.94, 1.06) * c.pitch;
     const buf = this.render({
       pulse: tau, amp: 1.0 * v,
       modes: [
-        { f: 185 * p, a: 0.3 * v, d: 0.045 },
-        { f: 420 * p, a: 0.26 * v, d: 0.03 },
+        { f: c.low * p, a: c.lowLevel * v, d: c.ring },
+        { f: c.high * p, a: c.highLevel * v, d: c.ring * 0.67 },
       ],
-      noise: { a: 0.05 * v, d: 0.012, lp: 600 },
+      noise: { a: c.noise * v, d: 0.012, lp: c.noiseTop * c.pitch },
     }, 0.25);
-    this.play(buf, at, this.pan(x), Sound.LEVEL.cushion);
+    this.play(buf, at, this.pan(x), Sound.LEVEL.cushion * c.volume);
   }
 
   /** A ball hits the back of a pocket hard enough to bounce: a knock on the facing behind the liner. */
