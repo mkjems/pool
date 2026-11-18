@@ -121,9 +121,10 @@ await scenario("touch: a tap aims, the power bar shoots", async (open) => {
   await fingers.tap(t.x, t.y);
   const a = await pool(p, () => window.__pool.aim());
   check(a.x > 0.9 && a.y < 0, "a tap aims at the tapped point", JSON.stringify(a));
-  // On an upright phone the power bar runs across the top: pull it from the left.
+  // On an upright phone the power bar runs across under the table: pull it from the left.
   const bar = await p.locator("#power").boundingBox();
-  check(bar.width > bar.height * 4 && bar.y < 160, "the power bar runs across the top", JSON.stringify(bar));
+  const rail = await screen(p, -1.981 / 2 - 0.12, 0); // the table's near end (upright, it is at the bottom)
+  check(bar.width > bar.height * 4 && bar.y > rail.y && bar.y + bar.height < 844, "the power bar runs across under the table", JSON.stringify(bar));
   const cdp = await p.context().newCDPSession(p);
   const at = (type, x) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y: bar.y + bar.height / 2 }] });
   await at("touchStart", bar.x + 4);

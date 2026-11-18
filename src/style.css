@@ -46,9 +46,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   position: absolute; left: 0; right: 0; top: 0; height: 0%;
   background: linear-gradient(#f7e3a8, #f0b54a 55%, #e2533a);
 }
-/* Across the top on a phone held upright (top is set to just under the buttons by fitView): filled from the left. */
+/* Across, under the table, on a phone held upright (fitView puts it just above the score): filled from the left. */
 .power.across {
-  --hud-edge: top; cursor: ew-resize; transform: none;
+  --hud-edge: bottom; cursor: ew-resize; transform: none;
   left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); width: auto; height: 38px;
 }
 .power.across .track { inset: 10px 0; }

@@ -474,9 +474,10 @@ Sizes are relative: S, M, L.
       measures how far each reaches in, and the camera fits the table into the rest, centred there by a lens
       shift (`setViewOffset`, still looking straight down). Upright: buttons on one row at the top, score at the
       bottom, power bar and spin on the right. Sideways: buttons and score in a column on the left. Desktop
-      unchanged. Then, at the user's suggestion: on an upright phone the power bar runs across the top under
-      the buttons (pull it from the left; `powerAcross`), and the spin button joins the score at the bottom,
-      so the table has the full width again (a ball ~19 px on a 390 px screen) and nothing covers it.
+      unchanged. Then, at the user's suggestion: on an upright phone the power bar runs across (pull it from
+      the left; `powerAcross`), and the spin button joins the score at the bottom, so the table has the full
+      width again (a ball ~19 px on a 390 px screen) and nothing covers it. The user tried it on the phone and
+      wants the bar **under the table**, just above the score (not across the top): done.
       Also fixed: the hidden ball-number labels were showing in the top-left corner (`display: flex` beat
       `hidden`).
 - [ ] Readable balls: band width, palette, the measurement from many angles.

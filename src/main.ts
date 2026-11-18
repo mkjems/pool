@@ -670,7 +670,7 @@ function computeGuide() {
 // ------------------------------------------------------------------ input
 
 const power$ = $("#power"), fill$ = $("#power .fill"), knob$ = $("#power .knob");
-/** The power bar runs across the top on a phone held upright (fitView sets it), down the side elsewhere. */
+/** The power bar runs across under the table on a phone held upright (fitView sets it), down the side elsewhere. */
 let powerAcross = false;
 function setPowerUI(p: number) {
   fill$.style.height = powerAcross ? "" : `${p * 100}%`;
@@ -979,10 +979,14 @@ window.addEventListener("keyup", (e) => {
  * stands at (its CSS --hud-edge), so the table takes the rest and nothing covers it.
  */
 function fitView() {
-  // An upright phone has height to spare and little width: the power bar goes across the top, under the buttons.
+  // An upright phone has height to spare and little width: the power bar goes across, under the table, just
+  // above the score and the spin button.
   powerAcross = innerWidth < 560 && innerHeight > innerWidth;
   power$.classList.toggle("across", powerAcross);
-  power$.style.top = powerAcross ? `${$(".bar").getBoundingClientRect().bottom + 8}px` : "";
+  if (powerAcross) {
+    const row = [$("#score"), $("#spin")].filter((el) => !el.hidden).map((el) => el.getBoundingClientRect().top);
+    power$.style.top = `${Math.min(innerHeight, ...row) - 8 - power$.offsetHeight}px`;
+  } else power$.style.top = "";
   setPowerUI(power);
   if (Math.min(innerWidth, innerHeight) < 560) {
     const ins = { top: 0, right: 0, bottom: 0, left: 0 };
