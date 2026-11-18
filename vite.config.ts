@@ -16,5 +16,6 @@ export default defineConfig({
   // The game's version, for friend matches: both browsers must run the same physics (the older one reloads).
   define: { __BUILD__: JSON.stringify(Date.now()) },
   build: { target: "es2022", chunkSizeWarningLimit: 900 },
-  test: { include: ["tests/**/*.test.ts"] },
+  // The computer's shot search takes seconds; a CI runner is slower than a Mac, so allow more than the 5 s default.
+  test: { include: ["tests/**/*.test.ts"], testTimeout: 30000 },
 });
