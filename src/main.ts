@@ -400,6 +400,7 @@ function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0)
   $("#over").hidden = true;
   $("#score").hidden = !ruled();
   updateScore();
+  fitView(); // the score takes room on a phone
   guideDirty = true;
   if (mode === "online") toast(game.turn === seat ? "Your break" : `${names[game.turn]} breaks`);
   else if (ruled()) toast(mode === "cpu" ? (game.turn === 0 ? "Your break" : "The computer breaks") : `${names[game.turn]} breaks`);
@@ -969,7 +970,27 @@ window.addEventListener("keyup", (e) => {
   if (e.key === "Shift") fine = false;
   if (e.key === " ") labels = labelsBtn.classList.contains("on");
 });
-window.addEventListener("resize", () => { view.resize(); guideDirty = true; });
+/**
+ * Fit the table to the screen. On small screens, first measure how far each control reaches in from the edge it
+ * stands at (its CSS --hud-edge), so the table takes the rest and nothing covers it.
+ */
+function fitView() {
+  if (Math.min(innerWidth, innerHeight) < 560) {
+    const ins = { top: 0, right: 0, bottom: 0, left: 0 };
+    for (const el of document.querySelectorAll<HTMLElement>(".bar, .score, .power, .spin")) {
+      const edge = getComputedStyle(el).getPropertyValue("--hud-edge").trim() as keyof typeof ins;
+      const r = el.getBoundingClientRect();
+      if (!(edge in ins) || el.hidden || r.width === 0) continue;
+      const reach = edge === "top" ? r.bottom : edge === "bottom" ? innerHeight - r.top : edge === "left" ? r.right : innerWidth - r.left;
+      ins[edge] = Math.max(ins[edge], reach + 4);
+    }
+    view.insets = ins;
+  } else view.insets = null;
+  view.resize();
+  guideDirty = true;
+}
+window.addEventListener("resize", fitView);
+fitView();
 
 let toastTimer = 0;
 function toast(msg: string) {

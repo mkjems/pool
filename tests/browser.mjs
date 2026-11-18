@@ -304,6 +304,24 @@ await scenario("the menu stays open when opened just after clearing the table", 
   check(await p.isVisible("#menu"), "the menu is still open");
 });
 
+await scenario("on phones, nothing covers the table", async (open) => {
+  for (const [w, h] of [[390, 844], [375, 667], [844, 390], [667, 375]]) {
+    const p = await open({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
+    await p.click("[data-mode=cpu]"); // the score shows too
+    const X = 1.981 / 2 + 0.12, Y = 0.9905 / 2 + 0.12; // the rails' outer edges
+    const corners = await Promise.all([[-X, -Y], [X, -Y], [X, Y], [-X, Y]].map(([x, y]) => screen(p, x, y)));
+    const t = { l: Math.min(...corners.map((c) => c.x)), r: Math.max(...corners.map((c) => c.x)), t: Math.min(...corners.map((c) => c.y)), b: Math.max(...corners.map((c) => c.y)) };
+    check(t.l >= 0 && t.t >= 0 && t.r <= w && t.b <= h, `the whole table is on a ${w}×${h} screen`, JSON.stringify(t));
+    for (const sel of [".bar nav", ".brand", ".score", "#power", "#spin"]) {
+      const r = await p.locator(sel).boundingBox();
+      if (!r) continue;
+      const overlap = r.x < t.r && r.x + r.width > t.l && r.y < t.b && r.y + r.height > t.t;
+      check(!overlap, `${sel} stays off the table on a ${w}×${h} screen`, JSON.stringify(r));
+    }
+    await p.context().close();
+  }
+});
+
 await scenario("menus fit or scroll on a phone held sideways", async (open) => {
   const p = await open({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
   await p.locator("#b-room").scrollIntoViewIfNeeded();

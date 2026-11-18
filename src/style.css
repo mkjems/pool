@@ -23,9 +23,11 @@ button {
 button:hover { border-color: rgba(240, 181, 74, 0.6); }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* --hud-edge: the screen edge a control takes room from. On small screens the table is fitted into what the
+   controls leave free (fitView in src/main.ts). */
 .bar {
   position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right));
-  display: flex; align-items: center; gap: 12px; pointer-events: none;
+  display: flex; align-items: center; gap: 12px; pointer-events: none; --hud-edge: top;
 }
 .bar > * { pointer-events: auto; }
 .brand { font: 700 18px/1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.02em; color: var(--ink); text-decoration: none; text-shadow: 0 1px 8px #000; }
@@ -33,6 +35,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar nav button { font-size: 12px; padding: 5px 10px; }
 
 .power {
+  --hud-edge: right;
   position: absolute; right: max(18px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
   width: 44px; height: min(52vh, 360px); touch-action: none; cursor: ns-resize;
 }
@@ -47,6 +50,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   position: absolute; left: -2px; right: -2px; top: 0; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--ink); box-shadow: 0 0 6px #000;
 }
 .spin {
+  --hud-edge: right;
   position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
   width: 52px; height: 52px; padding: 0; border-radius: 50%;
   background: radial-gradient(circle at 38% 32%, #fffdf6, #ddd6c6 60%, #9d978b);
@@ -81,14 +85,14 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .toast.show { opacity: 1; }
 
 @media (max-width: 560px), (max-height: 560px) {
-  .bar nav button { font-size: 11px; padding: 4px 8px; }
+  .bar nav button { font-size: 11px; padding: 4px 7px; }
   .power { width: 40px; height: min(46vh, 300px); right: max(6px, env(safe-area-inset-right)); }
   .spin { width: 46px; height: 46px; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); }
 }
 
 .score {
   position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; pointer-events: none;
+  display: flex; gap: 8px; pointer-events: none; --hud-edge: top;
 }
 .score[hidden] { display: none; }
 .score .p {
@@ -108,6 +112,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   display: flex; align-items: center; justify-content: center; font: 800 11px/1 Inter, system-ui, sans-serif;
   color: #111; box-shadow: 0 1px 4px rgba(0,0,0,0.6); border: 1.5px solid rgba(0,0,0,0.5);
 }
+.label[hidden] { display: none; }
 .label span { background: #f6f2e8; border-radius: 50%; width: 13px; height: 13px; display: flex; align-items: center; justify-content: center; }
 .menu {
   /* The card centres itself (margin: auto) and the page scrolls when it doesn't fit, as on a phone held sideways. */
@@ -155,9 +160,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .menu input { padding: 7px 12px; font-size: 14px; }
 }
 @media (max-width: 560px), (max-height: 560px) {
-  .score { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); }
+  .score { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); --hud-edge: bottom; }
   .score .p { padding: 4px 9px; }
   .mini { width: 11px; height: 11px; }
+  .bar { gap: 8px; }
+  .bar nav { gap: 4px; }
+  .brand { font-size: 15px; }
+}
+/* A phone held sideways: height is what's scarce, so the buttons and the score stand in a column on the left. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .bar { right: auto; flex-direction: column; align-items: flex-start; --hud-edge: left; }
+  .bar nav { flex-direction: column; align-items: stretch; }
+  .score { left: max(10px, env(safe-area-inset-left)); transform: none; flex-direction: column; align-items: flex-start; --hud-edge: left; }
+  /* A fixed width, name above the balls, so the column doesn't grow into the table as the game goes on. */
+  .score .p { flex-direction: column; align-items: flex-start; gap: 3px; width: 116px; }
+  .score .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 }
 .bar nav button.on { border-color: var(--accent); color: var(--accent); }
 .levels { display: flex; gap: 6px; justify-content: center; margin-bottom: 2px; }

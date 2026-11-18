@@ -39,7 +39,8 @@ asked for the caps slightly darker (done: `metalMat` colour `0xbabec4`). Green c
      the default unless the user says otherwise.
    Keep it original (our own design, not a copy of any product), and keep the frame time: check 60 fps at 2×
    after the change (the measuring snippet is in the commit "Smooth: 60 fps" and below).
-2. The power bar overlaps the right cushion on a phone held upright (to judge on a real phone).
+2. ~~The power bar overlaps the right cushion on a phone held upright.~~ Done 18 November: on phones the
+   table fits the space the controls leave free, with air around it (see phase 2).
 
 **What the user has said so far** (the game should keep these):
 - Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.
@@ -467,8 +468,16 @@ Sizes are relative: S, M, L.
 
 - [x] 3D table, balls, cue, exact shadows, camera fitting any window, portrait and landscape.
 - [ ] Mouse and touch controls, power, spin picker, loupe, aim guide.
-      Done except the loupe. The guide plays the shot on the real physics. On a phone held upright the power
-      bar overlaps the right cushion: to judge on a real phone.
+      Done except the loupe. The guide plays the shot on the real physics.
+      18 November, phones (the user asked for air around the table, room for the menus and power bar): each
+      control says in CSS which screen edge it takes room from (`--hud-edge`); `fitView` in `src/main.ts`
+      measures how far each reaches in, and the camera fits the table into the rest, centred there by a lens
+      shift (`setViewOffset`, still looking straight down). Upright: buttons on one row at the top, score at the
+      bottom, power bar and spin on the right. Sideways: buttons and score in a column on the left. Desktop
+      unchanged. The table is about 15% smaller on an upright phone than when the controls covered it (a ball
+      ~15 px wide on a 390 px screen); a horizontal power bar below the table would win that back, if wanted.
+      Also fixed: the hidden ball-number labels were showing in the top-left corner (`display: flex` beat
+      `hidden`).
 - [ ] Readable balls: band width, palette, the measurement from many angles.
       Band and palette done (patterns drawn in the shader, sharp at any size); measurement not yet.
 - [ ] Deploy to `pool.mkjems.dk`, not linked from anywhere, so it can be tried on real phones.

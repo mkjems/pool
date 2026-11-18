@@ -21,7 +21,11 @@ export interface View {
   scale(): number;
   /** Rendering resolution as a fraction of the screen's (lowered when frames are slow). */
   quality: number;
+  /** On small screens: how far the controls reach in from each edge (CSS px); the table fits the rest. */
+  insets: Insets | null;
 }
+
+export interface Insets { top: number; right: number; bottom: number; left: number }
 
 /** Table coordinates (z up) to world (y up). */
 export function toWorld(x: number, y: number, z: number, out = new THREE.Vector3()) {
@@ -79,29 +83,42 @@ export function makeView(canvas: HTMLCanvasElement): View {
 
   const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 30);
   const view: View = {
-    renderer, scene, camera, portrait: false, env, quality: 1,
+    renderer, scene, camera, portrait: false, env, quality: 1, insets: null,
     resize() {
       const w = window.innerWidth, h = window.innerHeight;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * view.quality);
       renderer.setSize(w, h, false);
       const portrait = h > w * 1.05;
       view.portrait = portrait;
-      // How much beyond the cushion noses must show: the whole table on big screens; on phones the pockets whole
-      // and most of the rail.
       const small = Math.min(w, h) < 560;
-      // On big screens: the whole table with air around it (room to move the mouse behind any ball).
-      const m = small ? CUSHION_W + RAIL_W * 0.8 : CUSHION_W + RAIL_W + 0.11;
-      // Room for the controls: the power bar at the side, the buttons and score along the top (kept symmetric
-      // at the bottom so the table stays centred).
-      const sidePx = small ? 0 : 72, topPx = small ? 0 : 52;
-      const along = TABLE_L / 2 + m, across = TABLE_W / 2 + m;
-      const sw = portrait ? w - topPx * 2 : w - sidePx * 2, sh = portrait ? h - sidePx * 2 : h - topPx * 2;
-      const ex = portrait ? across : along, ey = portrait ? along : across;
       const aspect = w / h;
       camera.aspect = aspect;
       const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      // The table's half-extents on screen (x across the screen, y up it), with the rails and some air: on big
+      // screens a lot (room to move the mouse behind any ball), on phones a little.
+      const m = small ? CUSHION_W + RAIL_W + 0.012 : CUSHION_W + RAIL_W + 0.11;
+      const along = TABLE_L / 2 + m, across = TABLE_W / 2 + m;
+      const ex = portrait ? across : along, ey = portrait ? along : across;
+      // The part of the screen it must fit in. Big screens: room for the power bar at the side and the buttons
+      // and score along the top, kept symmetric so the table stays centred. Small screens: what the controls
+      // leave free (view.insets), and the table is centred in that by shifting the image (the camera still looks
+      // straight down).
+      let sw: number, sh: number, cx = w / 2, cy = h / 2;
+      if (small && view.insets) {
+        const air = 8, i = view.insets;
+        sw = Math.max(100, w - i.left - i.right - air * 2);
+        sh = Math.max(100, h - i.top - i.bottom - air * 2);
+        cx = i.left + air + sw / 2;
+        cy = i.top + air + sh / 2;
+      } else {
+        const sidePx = small ? 0 : 72, topPx = small ? 0 : 52;
+        sw = portrait ? w - topPx * 2 : w - sidePx * 2;
+        sh = portrait ? h - sidePx * 2 : h - topPx * 2;
+      }
       // Visible half-extents at distance D: (D tan aspect, D tan); the table's extents must fit the usable part.
       const D = Math.max((ey * h) / sh / tan, (ex * w) / sw / (tan * aspect));
+      if (cx !== w / 2 || cy !== h / 2) camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
+      else camera.clearViewOffset();
       camera.position.set(0, D + R, 0);
       camera.up.set(portrait ? 1 : 0, 0, portrait ? 0 : -1);
       camera.lookAt(0, 0, 0);
