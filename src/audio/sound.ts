@@ -12,7 +12,11 @@
 import { TABLE_L } from "../sim/constants";
 
 /** The recordings: "./samples/cue-soft-2.wav" is the second take of "cue-soft". */
-const SAMPLE_URLS = import.meta.glob("./samples/*.wav", { query: "?url", import: "default", eager: true }) as Record<string, string>;
+const SAMPLE_URLS = import.meta.glob("./samples/*.wav", {
+  query: "?url",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
 /** Volume steps for the Sound button: off, low, medium, high. */
 export const VOLUMES = ["off", "low", "medium", "high"] as const;
@@ -24,24 +28,32 @@ const GAIN: Record<Volume, number> = { off: 0, low: 0.3, medium: 0.6, high: 1 };
  */
 export const CUSHION = {
   /** Loudness. 1 was the first version; 0.8 is 20% quieter. */
-  volume: 0.8,
+  volume: 0.7,
   /** Pitch of the whole sound. 1 was the first version; lower is deeper. Below about 0.7 phone speakers lose it. */
-  pitch: 0.85,
+  pitch: 0.75,
   /** How long the rubber is in contact, in milliseconds: longer is softer and duller. */
   contact: 5,
   /** The two tones of the rail ringing under the rubber, in Hz (before pitch), and how loud each is. */
-  low: 185, lowLevel: 0.3,
-  high: 420, highLevel: 0.26,
+  low: 185,
+  lowLevel: 0.3,
+  high: 420,
+  highLevel: 0.26,
   /** How long they ring, in seconds. */
   ring: 0.045,
   /** A little noise in the thump: how much, and the highest it goes (Hz, before pitch). */
-  noise: 0.05, noiseTop: 600,
+  noise: 0.05,
+  noiseTop: 600,
 };
 
-interface Mode { f: number; a: number; d: number }
+interface Mode {
+  f: number;
+  a: number;
+  d: number;
+}
 interface Impact {
   /** Contact pulse: duration (s) and amplitude. */
-  pulse: number; amp: number;
+  pulse: number;
+  amp: number;
   /** Ringing after the contact: frequency (Hz), amplitude, decay time constant (s). */
   modes: Mode[];
   /** Filtered noise: amplitude, decay (s), one-pole low-pass cutoff (Hz). */
@@ -66,10 +78,14 @@ export class Sound {
   /** Audio can only start after a user gesture. */
   unlock() {
     if (this.ctx) {
-      if (this.ctx instanceof AudioContext && this.ctx.state === "suspended") void this.ctx.resume();
+      if (this.ctx instanceof AudioContext && this.ctx.state === "suspended")
+        void this.ctx.resume();
       return;
     }
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
     if (!AC) return;
     this.attach(new AC());
   }
@@ -85,8 +101,11 @@ export class Sound {
     const clip = ctx.createWaveShaper();
     const curve = new Float32Array(2049);
     for (let i = 0; i < curve.length; i++) {
-      const x = (i / 1024 - 1) * 2, ax = Math.abs(x);
-      curve[i] = Math.sign(x) * (ax < 0.6 ? ax : 0.6 + 0.4 * Math.tanh((ax - 0.6) / 0.4));
+      const x = (i / 1024 - 1) * 2,
+        ax = Math.abs(x);
+      curve[i] =
+        Math.sign(x) *
+        (ax < 0.6 ? ax : 0.6 + 0.4 * Math.tanh((ax - 0.6) / 0.4));
     }
     clip.curve = curve;
     clip.oversample = "2x";
@@ -107,10 +126,18 @@ export class Sound {
       for (let i = 0; i < len; i++) {
         const t = i / sr;
         const k = 0.5 * Math.exp(-t * 9); // low-pass gets darker over time
-        lp += (1 - Math.exp(-2 * Math.PI * (2500 * k + 500) / sr)) * (Math.random() * 2 - 1 - lp);
+        lp +=
+          (1 - Math.exp((-2 * Math.PI * (2500 * k + 500)) / sr)) *
+          (Math.random() * 2 - 1 - lp);
         ch[i] = lp * Math.exp(-t / 0.13) * (t < 0.012 ? t / 0.012 : 1);
       }
-      for (const [ms, g] of [[7, 0.5], [11, 0.35], [17, 0.3], [23, 0.22], [31, 0.15]]) {
+      for (const [ms, g] of [
+        [7, 0.5],
+        [11, 0.35],
+        [17, 0.3],
+        [23, 0.22],
+        [31, 0.15],
+      ]) {
         ch[Math.floor(((ms + c * 1.7) / 1000) * sr)] += g * (c ? 0.9 : 1);
       }
     }
@@ -122,9 +149,12 @@ export class Sound {
 
     // Room tone: the air of a quiet hall, very low. Off unless asked for.
     const rsrc = ctx.createBufferSource();
-    rsrc.buffer = this.noise; rsrc.loop = true;
+    rsrc.buffer = this.noise;
+    rsrc.loop = true;
     const rlp = ctx.createBiquadFilter();
-    rlp.type = "lowpass"; rlp.frequency.value = 260; rlp.Q.value = 0.5;
+    rlp.type = "lowpass";
+    rlp.frequency.value = 260;
+    rlp.Q.value = 0.5;
     this.room = ctx.createGain();
     this.room.gain.value = this.roomTone ? 0.05 : 0;
     rsrc.connect(rlp).connect(this.room).connect(this.master);
@@ -136,14 +166,20 @@ export class Sound {
   /** Fetches and decodes the recordings; each one replaces its synthetic sound as soon as it is ready. */
   private async load() {
     const ctx = this.ctx!;
-    await Promise.all(Object.entries(SAMPLE_URLS).map(async ([path, url]) => {
-      try {
-        const buf = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
-        (this.samples[path.replace(/^.*\/|-\d+\.wav$/g, "")] ??= []).push(buf);
-      } catch {
-        // Stays synthetic.
-      }
-    }));
+    await Promise.all(
+      Object.entries(SAMPLE_URLS).map(async ([path, url]) => {
+        try {
+          const buf = await ctx.decodeAudioData(
+            await (await fetch(url)).arrayBuffer(),
+          );
+          (this.samples[path.replace(/^.*\/|-\d+\.wav$/g, "")] ??= []).push(
+            buf,
+          );
+        } catch {
+          // Stays synthetic.
+        }
+      }),
+    );
   }
 
   /** One of the takes of a recording, at random; undefined while there is none. */
@@ -157,16 +193,19 @@ export class Sound {
 
   setVolume(v: Volume) {
     this.volume = v;
-    if (this.ctx) this.master.gain.setTargetAtTime(GAIN[v], this.ctx.currentTime, 0.02);
+    if (this.ctx)
+      this.master.gain.setTargetAtTime(GAIN[v], this.ctx.currentTime, 0.02);
   }
 
   setRoomTone(on: boolean) {
     this.roomTone = on;
-    if (this.ctx) this.room.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.3);
+    if (this.ctx)
+      this.room.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.3);
   }
 
   private buzz(ms: number) {
-    if (this.haptics && this.volume !== "off" && "vibrate" in navigator) navigator.vibrate(ms);
+    if (this.haptics && this.volume !== "off" && "vibrate" in navigator)
+      navigator.vibrate(ms);
   }
 
   /**
@@ -183,7 +222,9 @@ export class Sound {
 
   /** Crowded hits are spread over a millisecond or so, as a real rack's are, so they don't add up in phase. */
   private spread(at: number) {
-    return this.recent.filter((t) => Math.abs(at - t) < 0.006).length > 1 ? at + Math.random() * 0.0015 : at;
+    return this.recent.filter((t) => Math.abs(at - t) < 0.006).length > 1
+      ? at + Math.random() * 0.0015
+      : at;
   }
 
   /** A short waveform for one impact, computed sample by sample. */
@@ -195,10 +236,16 @@ export class Sound {
     const out = buf.getChannelData(0);
     // The contact pulse: one cycle of a sine as long as the contact (the pressure wave of the sudden push).
     const pn = Math.max(2, Math.floor(spec.pulse * sr));
-    for (let i = 0; i < pn && i < n; i++) out[i] += spec.amp * Math.sin((2 * Math.PI * i) / pn) * Math.sin((Math.PI * i) / pn);
+    for (let i = 0; i < pn && i < n; i++)
+      out[i] +=
+        spec.amp *
+        Math.sin((2 * Math.PI * i) / pn) *
+        Math.sin((Math.PI * i) / pn);
     // Ringing, starting as the contact ends.
     for (const m of spec.modes) {
-      const w = (2 * Math.PI * m.f) / sr, k = Math.exp(-1 / (m.d * sr)), ph = Math.random() * 6.283;
+      const w = (2 * Math.PI * m.f) / sr,
+        k = Math.exp(-1 / (m.d * sr)),
+        ph = Math.random() * 6.283;
       let e = m.a;
       for (let i = 0; i < n; i++) {
         const rise = i < pn ? i / pn : 1;
@@ -208,8 +255,10 @@ export class Sound {
     }
     if (spec.noise) {
       const { a, d, lp } = spec.noise;
-      const c = 1 - Math.exp((-2 * Math.PI * lp) / sr), k = Math.exp(-1 / (d * sr));
-      let y = 0, e = a;
+      const c = 1 - Math.exp((-2 * Math.PI * lp) / sr),
+        k = Math.exp(-1 / (d * sr));
+      let y = 0,
+        e = a;
       for (let i = 0; i < n; i++) {
         y += c * (Math.random() * 2 - 1 - y);
         out[i] += y * e * 2.2;
@@ -228,7 +277,15 @@ export class Sound {
   private static SAMPLE = { ball: 0.83, cue: 0.6, pocket: 0.4 };
 
   /** rate: playback speed (pitch); lp: a low-pass cutoff (Hz) to make a recording duller, 0 for none. */
-  private play(buf: AudioBuffer, at: number, pan: number, level: number, wet = 1, rate = 1, lp = 0) {
+  private play(
+    buf: AudioBuffer,
+    at: number,
+    pan: number,
+    level: number,
+    wet = 1,
+    rate = 1,
+    lp = 0,
+  ) {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -236,7 +293,9 @@ export class Sound {
     let out: AudioNode = src;
     if (lp > 0 && lp < ctx.sampleRate * 0.45) {
       const f = ctx.createBiquadFilter();
-      f.type = "lowpass"; f.frequency.value = lp; f.Q.value = 0.7;
+      f.type = "lowpass";
+      f.frequency.value = lp;
+      f.Q.value = 0.7;
       out = src.connect(f);
     }
     const g0 = ctx.createGain();
@@ -253,8 +312,12 @@ export class Sound {
     src.start(at);
   }
 
-  private when(delay: number) { return this.ctx!.currentTime + Math.max(0, delay); }
-  private pan(x: number) { return (x / (TABLE_L / 2)) * 0.6; }
+  private when(delay: number) {
+    return this.ctx!.currentTime + Math.max(0, delay);
+  }
+  private pan(x: number) {
+    return (x / (TABLE_L / 2)) * 0.6;
+  }
 
   /** Two balls click. speed: approach speed (m/s); x: where along the table; delay: seconds from now. */
   ball(speed: number, x: number, delay = 0) {
@@ -267,21 +330,33 @@ export class Sound {
     if (rec) {
       // One recording for every strength: softer hits play quieter and duller (open at full strength, about
       // 5 kHz for a gentle 1 m/s touch).
-      this.play(rec, this.spread(at), this.pan(x), Sound.SAMPLE.ball * v, 1, rand(0.96, 1.04), 3000 * Math.pow(7, v));
+      this.play(
+        rec,
+        this.spread(at),
+        this.pan(x),
+        Sound.SAMPLE.ball * v,
+        1,
+        rand(0.96, 1.04),
+        3000 * Math.pow(7, v),
+      );
       return;
     }
     // Hertz contact between two resin balls: about a quarter of a millisecond, a little shorter when harder.
     const tau = 0.00028 * Math.pow(Math.max(speed, 0.05) / 2, -0.2);
     const p = rand(0.95, 1.05);
-    const buf = this.render({
-      pulse: tau, amp: 1.1 * v,
-      modes: [
-        { f: 3900 * p, a: 0.3 * v, d: 0.006 + 0.004 * v },
-        { f: 6300 * p, a: 0.12 * v, d: 0.004 },
-        { f: 2400 * p, a: 0.12 * v, d: 0.009 },
-      ],
-      noise: { a: 0.15 * v, d: 0.003, lp: 5000 },
-    }, 0.06);
+    const buf = this.render(
+      {
+        pulse: tau,
+        amp: 1.1 * v,
+        modes: [
+          { f: 3900 * p, a: 0.3 * v, d: 0.006 + 0.004 * v },
+          { f: 6300 * p, a: 0.12 * v, d: 0.004 },
+          { f: 2400 * p, a: 0.12 * v, d: 0.009 },
+        ],
+        noise: { a: 0.15 * v, d: 0.003, lp: 5000 },
+      },
+      0.06,
+    );
     this.play(buf, this.spread(at), this.pan(x), Sound.LEVEL.ball);
   }
 
@@ -295,16 +370,21 @@ export class Sound {
     // Rubber gives: a few milliseconds of contact, a soft thump, and the wooden rail rings under it. Tuned by the
     // user's ear (CUSHION above): darker, quieter and lower than the first version.
     const c = CUSHION;
-    const tau = (c.contact / 1000 / c.pitch) * Math.pow(Math.max(speed, 0.1), -0.15);
+    const tau =
+      (c.contact / 1000 / c.pitch) * Math.pow(Math.max(speed, 0.1), -0.15);
     const p = rand(0.94, 1.06) * c.pitch;
-    const buf = this.render({
-      pulse: tau, amp: 1.0 * v,
-      modes: [
-        { f: c.low * p, a: c.lowLevel * v, d: c.ring },
-        { f: c.high * p, a: c.highLevel * v, d: c.ring * 0.67 },
-      ],
-      noise: { a: c.noise * v, d: 0.012, lp: c.noiseTop * c.pitch },
-    }, 0.25);
+    const buf = this.render(
+      {
+        pulse: tau,
+        amp: 1.0 * v,
+        modes: [
+          { f: c.low * p, a: c.lowLevel * v, d: c.ring },
+          { f: c.high * p, a: c.highLevel * v, d: c.ring * 0.67 },
+        ],
+        noise: { a: c.noise * v, d: 0.012, lp: c.noiseTop * c.pitch },
+      },
+      0.25,
+    );
     this.play(buf, at, this.pan(x), Sound.LEVEL.cushion * c.volume);
   }
 
@@ -316,16 +396,20 @@ export class Sound {
     v *= this.allow(at, v);
     if (v === 0) return;
     const p = rand(0.94, 1.06);
-    const buf = this.render({
-      pulse: 0.0014, amp: 0.9 * v,
-      modes: [
-        { f: 260 * p, a: 0.25 * v, d: 0.035 },
-        { f: 640 * p, a: 0.2 * v, d: 0.022 },
-        { f: 1550 * p, a: 0.1 * v, d: 0.01 },
-        { f: 3600 * p, a: 0.06 * v, d: 0.004 },
-      ],
-      noise: { a: 0.1 * v, d: 0.01, lp: 2500 },
-    }, 0.2);
+    const buf = this.render(
+      {
+        pulse: 0.0014,
+        amp: 0.9 * v,
+        modes: [
+          { f: 260 * p, a: 0.25 * v, d: 0.035 },
+          { f: 640 * p, a: 0.2 * v, d: 0.022 },
+          { f: 1550 * p, a: 0.1 * v, d: 0.01 },
+          { f: 3600 * p, a: 0.06 * v, d: 0.004 },
+        ],
+        noise: { a: 0.1 * v, d: 0.01, lp: 2500 },
+      },
+      0.2,
+    );
     this.play(buf, at, this.pan(x), Sound.LEVEL.cushion);
   }
 
@@ -337,25 +421,43 @@ export class Sound {
     this.allow(at, 1); // counts toward the crowding of the break
     // A recording of a soft, medium or hard hit by the shot's speed (a third and three quarters of full power).
     // The miscue's scrape stays synthetic.
-    const order = speed < 2.2 ? ["cue-soft", "cue-medium", "cue-hard"] : speed < 5.5 ? ["cue-medium", "cue-hard", "cue-soft"] : ["cue-hard", "cue-medium", "cue-soft"];
+    const order =
+      speed < 2.2
+        ? ["cue-soft", "cue-medium", "cue-hard"]
+        : speed < 5.5
+          ? ["cue-medium", "cue-hard", "cue-soft"]
+          : ["cue-hard", "cue-medium", "cue-soft"];
     const rec = miscue ? undefined : this.sample(...order);
     if (rec) {
-      this.play(rec, at, 0, (Sound.SAMPLE.cue * (0.9 * v + 0.15)) / 1.05, 1, rand(0.97, 1.03));
+      this.play(
+        rec,
+        at,
+        0,
+        (Sound.SAMPLE.cue * (0.9 * v + 0.15)) / 1.05,
+        1,
+        rand(0.97, 1.03),
+      );
       this.buzz(Math.round(8 + 22 * v));
       return;
     }
     // Leather on resin: about a millisecond, a duller "tok" than ball on ball. Then the shaft rings, and on hard
     // shots the ball's own click comes through.
     const tau = 0.0011 * Math.pow(Math.max(speed, 0.3) / 3, -0.25);
-    const buf = this.render({
-      pulse: tau, amp: 0.9 * v + 0.15,
-      modes: [
-        { f: rand(690, 730), a: 0.14 * v + 0.03, d: 0.03 },
-        { f: rand(1680, 1760), a: 0.14 * v + 0.03, d: 0.018 },
-        { f: 3900, a: 0.16 * v * v, d: 0.004 },
-      ],
-      noise: miscue ? { a: 0.25, d: 0.05, lp: 5000 } : { a: 0.05 * v, d: 0.004, lp: 3000 },
-    }, 0.12);
+    const buf = this.render(
+      {
+        pulse: tau,
+        amp: 0.9 * v + 0.15,
+        modes: [
+          { f: rand(690, 730), a: 0.14 * v + 0.03, d: 0.03 },
+          { f: rand(1680, 1760), a: 0.14 * v + 0.03, d: 0.018 },
+          { f: 3900, a: 0.16 * v * v, d: 0.004 },
+        ],
+        noise: miscue
+          ? { a: 0.25, d: 0.05, lp: 5000 }
+          : { a: 0.05 * v, d: 0.004, lp: 3000 },
+      },
+      0.12,
+    );
     this.play(buf, at, 0, Sound.LEVEL.cue);
     this.buzz(miscue ? 40 : Math.round(8 + 22 * v));
   }
@@ -373,43 +475,93 @@ export class Sound {
     // next to it (18 November), and stay off until there is a recording of the return.
     const rec = this.sample("pocket");
     if (rec) {
-      this.play(rec, at, this.pan(x), Sound.SAMPLE.pocket * v, 0.8, rand(0.95, 1.04));
+      this.play(
+        rec,
+        at,
+        this.pan(x),
+        Sound.SAMPLE.pocket * v,
+        0.8,
+        rand(0.95, 1.04),
+      );
       this.buzz(25);
       return;
     }
-    this.play(this.render({
-      pulse: 0.0016, amp: 0.45 * v,
-      modes: [
-        { f: rand(170, 190), a: 0.2 * v, d: 0.05 },
-        { f: rand(400, 440), a: 0.12 * v, d: 0.03 },
-        { f: rand(1050, 1200), a: 0.05 * v, d: 0.012 },
-      ],
-      noise: { a: 0.08 * v, d: 0.02, lp: 1400 },
-    }, 0.3), at, this.pan(x), Sound.LEVEL.pocket, 0.8);
+    this.play(
+      this.render(
+        {
+          pulse: 0.0016,
+          amp: 0.45 * v,
+          modes: [
+            { f: rand(170, 190), a: 0.2 * v, d: 0.05 },
+            { f: rand(400, 440), a: 0.12 * v, d: 0.03 },
+            { f: rand(1050, 1200), a: 0.05 * v, d: 0.012 },
+          ],
+          noise: { a: 0.08 * v, d: 0.02, lp: 1400 },
+        },
+        0.3,
+      ),
+      at,
+      this.pan(x),
+      Sound.LEVEL.pocket,
+      0.8,
+    );
     if (speed > 1.2) {
-      const rattle = this.render({ pulse: 0.0004, amp: 0.25 * v, modes: [{ f: rand(3000, 3600), a: 0.08, d: 0.006 }] }, 0.04);
+      const rattle = this.render(
+        {
+          pulse: 0.0004,
+          amp: 0.25 * v,
+          modes: [{ f: rand(3000, 3600), a: 0.08, d: 0.006 }],
+        },
+        0.04,
+      );
       this.play(rattle, at + rand(0.02, 0.04), this.pan(x), Sound.LEVEL.pocket);
     }
     this.buzz(25);
 
     // The run down the return: a hollow rumble that grows as the ball speeds up, then the clack at the end.
     const run = rand(0.55, 0.8) + Math.abs(x) * 0.15;
-    this.play(this.returnRun(run), at + 0.12, this.pan(x) * 0.5, Sound.LEVEL.pocket, 0.9);
+    this.play(
+      this.returnRun(run),
+      at + 0.12,
+      this.pan(x) * 0.5,
+      Sound.LEVEL.pocket,
+      0.9,
+    );
     const endAt = at + 0.12 + run;
     const end = Math.min(down, 3);
     if (down > 0) {
       // Resin on resin, muffled by the distance under the table; a second, quieter tap as the row settles.
       for (let i = 0; i < 1 + (end > 1 ? 1 : 0); i++) {
         const k = i ? 0.35 : 1;
-        const clack = this.render({
-          pulse: 0.0003, amp: 0.38 * k,
-          modes: [{ f: rand(3800, 4300), a: 0.08 * k, d: 0.008 }, { f: rand(1300, 1500), a: 0.06 * k, d: 0.012 }],
-          noise: { a: 0.04 * k, d: 0.004, lp: 3500 },
-        }, 0.06);
-        this.play(clack, endAt + i * rand(0.05, 0.08), 0.15, Sound.LEVEL.pocket, 1.3);
+        const clack = this.render(
+          {
+            pulse: 0.0003,
+            amp: 0.38 * k,
+            modes: [
+              { f: rand(3800, 4300), a: 0.08 * k, d: 0.008 },
+              { f: rand(1300, 1500), a: 0.06 * k, d: 0.012 },
+            ],
+            noise: { a: 0.04 * k, d: 0.004, lp: 3500 },
+          },
+          0.06,
+        );
+        this.play(
+          clack,
+          endAt + i * rand(0.05, 0.08),
+          0.15,
+          Sound.LEVEL.pocket,
+          1.3,
+        );
       }
     } else {
-      const thud = this.render({ pulse: 0.003, amp: 0.3, modes: [{ f: rand(130, 150), a: 0.15, d: 0.05 }] }, 0.2);
+      const thud = this.render(
+        {
+          pulse: 0.003,
+          amp: 0.3,
+          modes: [{ f: rand(130, 150), a: 0.15, d: 0.05 }],
+        },
+        0.2,
+      );
       this.play(thud, endAt, 0.15, Sound.LEVEL.pocket, 1.3);
     }
   }
@@ -421,16 +573,25 @@ export class Sound {
     const n = Math.floor(length * sr);
     const buf = ctx.createBuffer(1, n, sr);
     const out = buf.getChannelData(0);
-    let a = 0, b = 0;
-    const ca = 1 - Math.exp((-2 * Math.PI * 380) / sr), cb = 1 - Math.exp((-2 * Math.PI * 140) / sr);
-    const wob = rand(9, 13), wob2 = rand(17, 23);
+    let a = 0,
+      b = 0;
+    const ca = 1 - Math.exp((-2 * Math.PI * 380) / sr),
+      cb = 1 - Math.exp((-2 * Math.PI * 140) / sr);
+    const wob = rand(9, 13),
+      wob2 = rand(17, 23);
     for (let i = 0; i < n; i++) {
-      const t = i / sr, u = t / length;
+      const t = i / sr,
+        u = t / length;
       const r = Math.random() * 2 - 1;
       a += ca * (r - a); // the rumble
       b += cb * (a - b); // the hollow box under the table: a second low-pass for the body
-      const env = Math.min(1, u * 4) * Math.min(1, (1 - u) * 12) * (0.6 + 0.4 * u);
-      const turn = 0.75 + 0.25 * Math.sin(2 * Math.PI * wob * t * (1 + u)) * Math.sin(2 * Math.PI * wob2 * t);
+      const env =
+        Math.min(1, u * 4) * Math.min(1, (1 - u) * 12) * (0.6 + 0.4 * u);
+      const turn =
+        0.75 +
+        0.25 *
+          Math.sin(2 * Math.PI * wob * t * (1 + u)) *
+          Math.sin(2 * Math.PI * wob2 * t);
       out[i] = (a * 0.9 + b * 2.0) * env * turn * 0.3;
     }
     return buf;
