@@ -13,7 +13,8 @@
     "bench": "node tests/bench.mjs",
     "selfplay": "node tests/selfplay.mjs",
     "serve": "npm run build && node server/server.mjs",
-    "browser": "node tests/browser.mjs"
+    "browser": "node tests/browser.mjs",
+    "sounds": "node sounds/build.mjs"
   },
   "dependencies": {
     "three": "^0.181.2",

@@ -3,3 +3,4 @@ dist/
 .playwright-mcp/
 tests/out/
 .DS_Store
+sounds/incomming/

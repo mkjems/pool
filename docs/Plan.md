@@ -58,7 +58,8 @@ front edge of each hole is round, never straight (the user: "that is not how poo
   gentle contact shadow).
 - Aiming with the mouse must work near the window edges: power is the drag distance in any direction.
 - Wants "air" around the table on big screens.
-- Sounds: no table to record on; synthetic for now, the user is looking for free recordings online.
+- Sounds: no table to record on; recordings the user finds replace the synthetic ones event by event
+  (18 November: ball click, cue tip, pocket drop).
   No rolling sound: the noise-based one sounded like a sea breeze.
 - Improvement ideas: try them and keep what works.
 - Green cloth is the default (teal stays an option on the Cloth button). Slim plain wooden rails, no metal
@@ -540,6 +541,16 @@ Sizes are relative: S, M, L.
       the rest. Measured by rendering offline in Chromium (peaks: hard ball click 0.74, hard cue 0.54,
       hard cushion 0.41, pocket 0.33, a full break 0.84). Bodies of cushion and pocket sounds sit at 180-420 Hz
       so phone speakers play them.
+      18 November, first recordings from the user: ball on ball (one), cue tip soft, medium and hard, the drop
+      into a pocket. Originals in `sounds/source/`; `npm run sounds` (`sounds/build.mjs`) trims each to a
+      millisecond before the hit, ends it where it sinks into the recording's background noise (with a fade),
+      makes it mono and sets every peak to 0.89, into `src/audio/samples/` (`name-N.wav`, N the take: more
+      takes are picked at random). WAV, not AAC: about 40 KB in all, exact timing (AAC adds ~46 ms of
+      silence at the start) and every browser decodes it (checked in Chromium, WebKit and Firefox). Played
+      by speed: loudness as the synthetic ones, the cue picks soft, medium or hard (under 2.2, 5.5 m/s, over),
+      the single ball click is made duller for soft hits (low-pass 3 kHz × 7^v), pitch varies ±3-5%. Hardest
+      hits peak where the synthetic ones did. Still synthetic: cushion, rattle, miscue, the run down the
+      return. Sources and licences of the recordings: to ask the user.
 - [x] Rolling sound, reverb, room tone, vibration, volume settings.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than
