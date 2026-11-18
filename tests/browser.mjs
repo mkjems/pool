@@ -121,8 +121,16 @@ await scenario("touch: a tap aims, the power bar shoots", async (open) => {
   await fingers.tap(t.x, t.y);
   const a = await pool(p, () => window.__pool.aim());
   check(a.x > 0.9 && a.y < 0, "a tap aims at the tapped point", JSON.stringify(a));
+  // On an upright phone the power bar runs across the top: pull it from the left.
   const bar = await p.locator("#power").boundingBox();
-  await fingers.drag(bar.x + bar.width / 2, bar.y + 4, bar.x + bar.width / 2, bar.y + bar.height * 0.6);
+  check(bar.width > bar.height * 4 && bar.y < 160, "the power bar runs across the top", JSON.stringify(bar));
+  const cdp = await p.context().newCDPSession(p);
+  const at = (type, x) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y: bar.y + bar.height / 2 }] });
+  await at("touchStart", bar.x + 4);
+  for (let i = 1; i <= 10; i++) { await at("touchMove", bar.x + 4 + (bar.width * 0.6 * i) / 10); await p.waitForTimeout(16); }
+  const fill = await p.evaluate(() => parseFloat(document.querySelector("#power .fill").style.width));
+  check(fill > 50 && fill < 70, "the fill follows the finger", `${fill}%`);
+  await at("touchEnd");
   await played(p);
   check((await pool(p, () => window.__pool.balls()))[0].x > -0.45, "the cue ball moved");
 });

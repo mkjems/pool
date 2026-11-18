@@ -407,7 +407,7 @@ function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0)
   if (!store.get("hinted")) {
     store.set("hinted", "1");
     setTimeout(() => toast(matchMedia("(pointer: coarse)").matches
-      ? "Drag to aim. Pull the power bar down and let go to shoot."
+      ? `Drag to aim. Pull the power bar ${powerAcross ? "across" : "down"} and let go to shoot.`
       : "Point to aim. Press, drag away and let go to shoot."), 2700);
   }
 }
@@ -670,9 +670,13 @@ function computeGuide() {
 // ------------------------------------------------------------------ input
 
 const power$ = $("#power"), fill$ = $("#power .fill"), knob$ = $("#power .knob");
+/** The power bar runs across the top on a phone held upright (fitView sets it), down the side elsewhere. */
+let powerAcross = false;
 function setPowerUI(p: number) {
-  fill$.style.height = `${p * 100}%`;
-  knob$.style.top = `${p * 100}%`;
+  fill$.style.height = powerAcross ? "" : `${p * 100}%`;
+  knob$.style.top = powerAcross ? "" : `${p * 100}%`;
+  fill$.style.width = powerAcross ? `${p * 100}%` : "";
+  knob$.style.left = powerAcross ? `${p * 100}%` : "";
 }
 
 let mouseDown: { x: number; y: number } | null = null;
@@ -786,19 +790,19 @@ canvas.addEventListener("pointerup", (e) => {
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("wheel", (e) => { if (state === "aim" && !watching()) { e.preventDefault(); rotateAim(-Math.sign(e.deltaY) * (e.shiftKey ? 0.0175 : 0.00175)); } }, { passive: false });
 
-// Power slider: pull down, release to shoot; back to the top cancels.
+// Power slider: pull down (or across, on an upright phone), release to shoot; back to the start cancels.
 power$.addEventListener("pointerdown", (e) => {
   if (state !== "aim" || watching()) return;
   sound.unlock();
   power$.setPointerCapture(e.pointerId);
-  const set = (y: number) => {
+  const set = (x: number, y: number) => {
     const r = power$.getBoundingClientRect();
-    power = Math.max(0, Math.min(1, (y - r.top) / r.height));
+    power = Math.max(0, Math.min(1, powerAcross ? (x - r.left) / r.width : (y - r.top) / r.height));
     setPowerUI(power);
     guideDirty = true;
   };
-  set(e.clientY);
-  const move = (ev: PointerEvent) => set(ev.clientY);
+  set(e.clientX, e.clientY);
+  const move = (ev: PointerEvent) => set(ev.clientX, ev.clientY);
   const up = () => {
     power$.removeEventListener("pointermove", move);
     power$.removeEventListener("pointerup", up);
@@ -975,6 +979,11 @@ window.addEventListener("keyup", (e) => {
  * stands at (its CSS --hud-edge), so the table takes the rest and nothing covers it.
  */
 function fitView() {
+  // An upright phone has height to spare and little width: the power bar goes across the top, under the buttons.
+  powerAcross = innerWidth < 560 && innerHeight > innerWidth;
+  power$.classList.toggle("across", powerAcross);
+  power$.style.top = powerAcross ? `${$(".bar").getBoundingClientRect().bottom + 8}px` : "";
+  setPowerUI(power);
   if (Math.min(innerWidth, innerHeight) < 560) {
     const ins = { top: 0, right: 0, bottom: 0, left: 0 };
     for (const el of document.querySelectorAll<HTMLElement>(".bar, .score, .power, .spin")) {
