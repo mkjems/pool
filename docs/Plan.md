@@ -610,6 +610,13 @@ Sizes are relative: S, M, L.
 
 ### Phase 8: on the homepage (S)
 
+- [ ] Online at `pool.mkjems.dk` (18 November: prepared, not yet pushed or deployed).
+  - Here: multi-stage `Dockerfile` (build, then Node 22 with only `ws` and `dist/`), `compose.yaml` (copy of
+    `/opt/pool/compose.yaml`), `.github/workflows/deploy.yml` (`npm test` and build gate the deploy; the
+    browser tests need a Mac GPU, run them locally before pushing), GoatCounter in `index.html` (counts only
+    on `pool.mkjems.dk`). Image built and run locally: game and relay answer.
+  - Infrastructure repository: route on 8087, `/opt/pool`, access log, committed locally. DNS already points
+    at the VPS. Still to do: GitHub repository, secrets, playbook, `/opt/pool/compose.yaml`, first push.
 - [ ] Screenshot, `projects.ts`, the texts, the sitemap. Share image and description for the game itself.
 
 **Exit:** the game is the first entry on mkjems.dk.
