@@ -4,7 +4,7 @@ A plan for an 8-ball pool game at `pool.mkjems.dk`, the sixth game on mkjems.dk.
 The goal: a pool game that looks, sounds and plays better on the table than
 [8ballpool.com/game](https://8ballpool.com/game), against the computer or against a friend, on desktop and phone.
 
-**Current phase:** 8, on the homepage. The game is online at https://pool.mkjems.dk (18 November), friend matches too.
+**Current phase:** 9, more, in the order you choose. Online at https://pool.mkjems.dk and first on mkjems.dk (18 November).
 See [Next session](#next-session). Phases 0-4 are playable: `npm run dev` offers the computer (easy, medium, hard),
 two players on one device, and practice. Phases 2 and 3 still wait on your feel on a real phone.
 
@@ -618,7 +618,12 @@ Sizes are relative: S, M, L.
   - Infrastructure repository: route on 8087, `/opt/pool`, access log (pushed, playbook applied).
     `/opt/pool/compose.yaml` on the VPS. Secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` set.
   - CI is slower than the Mac: the test timeout is 30 s (`vite.config.ts`).
-- [ ] Screenshot, `projects.ts`, the texts, the sitemap. Share image and description for the game itself.
+- [x] Screenshot, `projects.ts`, the texts. Share image and description for the game itself (18 November).
+  - Homepage: Pool first, genre "Cue sport" ("Pool" next to the name read twice), the user's screenshot as
+    `public/screens/pool.jpg`; "six" in the texts, Pool in the title, descriptions and structured data. The
+    sitemap stays as it is: a sitemap may only list its own host, and no other game is in it.
+  - Here: `public/share.jpg` (1200 × 630, from the user's `classic-8-ball-pool.png`), Open Graph tags and a
+    canonical link in `index.html`.
 
 **Exit:** the game is the first entry on mkjems.dk.
 
