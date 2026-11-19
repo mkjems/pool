@@ -151,7 +151,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .menu .card button:not(.primary, .link) { background: rgba(0, 0, 0, 0.26); }
 .menu .card button:not(.primary, .link):hover { background: rgba(0, 0, 0, 0.36); }
-.menu h1 { margin: 0; font: 800 34px/1.1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.01em; }
+.menu h1 {
+  margin: 0; font: 800 34px/1.1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.01em;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+/* The space a line under the title once took. */
+#menu h1 { margin-bottom: 30px; }
 .menu p { margin: 0 0 6px; color: var(--muted); }
 .menu .soon { margin: 6px 0 0; font-size: 12px; }
 .menu button { padding: 10px 16px; font-size: 15px; }
@@ -213,7 +218,23 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .bar nav button.on { border-color: var(--accent); color: var(--accent); }
 /* The computer's level, under its button: small, quiet choices; the chosen one lit. */
-.levels { display: flex; gap: 4px; justify-content: center; margin: -4px 0 6px; }
-.menu .card .levels button { padding: 4px 12px; font-size: 13px; color: var(--muted); background: none; border-color: transparent; }
-.menu .card .levels button:hover { color: var(--ink); }
-.menu .card .levels button[aria-checked="true"] { color: var(--accent); border-color: rgba(240, 181, 74, 0.55); background: rgba(0, 0, 0, 0.2); }
+/* The computer's level: three segments in a recessed track; a raised pill slides to the chosen one. */
+.levels {
+  position: relative; display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; margin: -2px 0 6px;
+  border-radius: 999px; background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.15), 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.levels::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 999px;
+  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.09));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.24s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.levels:has([data-level="medium"][aria-checked="true"])::before { transform: translateX(100%); }
+.levels:has([data-level="hard"][aria-checked="true"])::before { transform: translateX(200%); }
+.menu .card .levels button {
+  position: relative; padding: 6px 0; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; color: var(--muted);
+  background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; transition: color 0.2s;
+}
+.menu .card .levels button:hover { color: var(--ink); background: none; }
+.menu .card .levels button[aria-checked="true"] { color: var(--ink); font-weight: 600; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35); }
