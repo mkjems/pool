@@ -68,7 +68,7 @@ front edge of each hole is round, never straight (the user: "that is not how poo
   features** (no emotes, shot clock or other extras until the user asks).
 
 **Sound, done 17 November, to judge by ear:** every sound rebuilt (`src/audio/sound.ts`), each event heard at
-its own moment in the simulation, a volume button, room sound in the menu, vibration on Android. See phase 5.
+its own moment in the simulation, a volume button, room sound (the Room button in the top bar), vibration on Android. See phase 5.
 
 **Pocket drops, done 17 November, to judge:** a potted ball now falls in 3D (`src/render/pocketfall.ts`), see
 phase 6. The user found the old slide-and-shrink "very bad" and asked for realism.
@@ -90,8 +90,8 @@ the spin button). Practice mode has no scoreboard, so nothing there yet.
 nothing is pushed or deployed. What works, tested: `server/relay.mjs` (rooms by 4-character code, seats with
 rejoin keys, keeps the match's start and latest shot; in Vite dev and preview through a plugin in
 `vite.config.ts`, in production through `server/server.mjs`, `npm run serve`), `src/net/net.ts` (reconnects,
-rejoins, keep-alive, remembers the seat for reloads), and the online mode in `src/main.ts`: menu (name, "Play a
-friend online", join by code), invite card (link, copy, share), live aiming, shots carrying the shooter's exact
+rejoins, keep-alive, remembers the seat for reloads), and the online mode in `src/main.ts`: "Play a friend online" opens its own card (name,
+"Invite a friend", join by code), invite card (link, copy, share), live aiming, shots carrying the shooter's exact
 position and game, re-rack and cue respawn seeded alike, "away" banner, leave, rematch. `tests/relay.test.ts`;
 two-browser runs through the dev server (pair, 6 shots identical on both sides, reload mid-match, rematch,
 dropout banner, leave) all passed. 18 November: the user played two browsers against each other, fine. Then
@@ -571,7 +571,7 @@ Sizes are relative: S, M, L.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than
       noise, or a recording. Room: early reflections
-      and a 0.9 s tail darker as it decays. Room sound (the air of a hall) is off by default, in the menu.
+      and a 0.9 s tail darker as it decays. Room sound (the air of a hall) is off by default, the Room button in the top bar.
       Volume: the Sound button steps high, medium, low, off; M mutes and unmutes. Vibration on the strike and
       on pots after touch input (Android; iPhones have no vibration API).
 

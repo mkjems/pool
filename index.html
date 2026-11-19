@@ -35,6 +35,7 @@
         <button id="b-guide" title="Aim guide (G)">Guide: full</button>
         <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
         <button id="b-sound" title="Volume (M mutes)">Sound: high</button>
+        <button id="b-room" title="Room sound: the faint air of a quiet hall" aria-pressed="false">Room</button>
       </nav>
     </header>
     <div id="score" class="score" hidden>
@@ -58,23 +59,29 @@
       <div class="card">
         <h1>Pool</h1>
         <p>8-ball with real physics.</p>
+        <button data-mode="cpu" class="primary">Play the computer</button>
         <div class="levels" role="radiogroup" aria-label="Computer level">
           <button data-level="easy" role="radio">Easy</button>
           <button data-level="medium" role="radio">Medium</button>
           <button data-level="hard" role="radio">Hard</button>
         </div>
-        <button data-mode="cpu" class="primary">Play the computer</button>
         <button data-mode="pass">Two players, one device</button>
-        <button data-mode="practice">Practice</button>
-        <div class="online">
-          <button id="b-online">Play a friend online</button>
-          <div class="row">
-            <input id="join-code" placeholder="Code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your friend's code">
-            <button id="b-join">Join</button>
-          </div>
-          <input id="name" placeholder="Your name (for friends)" maxlength="20" autocomplete="nickname" aria-label="Your name">
+        <button id="b-online">Play a friend online</button>
+        <button data-mode="practice" class="link">Practice</button>
+      </div>
+    </div>
+    <div id="online" class="menu" hidden>
+      <div class="card">
+        <h1>Play a friend</h1>
+        <p>Send them a link, or join theirs.</p>
+        <input id="name" placeholder="Your name" maxlength="20" autocomplete="nickname" aria-label="Your name">
+        <button id="b-invite" class="primary">Invite a friend</button>
+        <p class="or">Got a code from a friend?</p>
+        <div class="row">
+          <input id="join-code" placeholder="Code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your friend's code">
+          <button id="b-join">Join</button>
         </div>
-        <button id="b-room" class="quiet" aria-pressed="false" title="The faint air of a quiet hall">Room sound: off</button>
+        <button id="b-online-back" class="link">Back</button>
       </div>
     </div>
     <div id="invite" class="menu" hidden>

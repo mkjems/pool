@@ -241,11 +241,13 @@ await scenario("the computer plays its turn", async (open) => {
 /** Two people: A hosts, B joins by typing the code. */
 async function pair(open) {
   const a = await open(), b = await open();
+  await a.click("#b-online");
   await a.fill("#name", "Anna");
   await a.press("#name", "Enter");
-  await a.click("#b-online");
+  await a.click("#b-invite");
   await a.waitForFunction(() => document.querySelector("#invite-code").textContent.length === 4);
   const code = await a.textContent("#invite-code");
+  await b.click("#b-online");
   await b.fill("#join-code", code.toLowerCase());
   await b.click("#b-join");
   for (const p of [a, b]) await p.waitForFunction(() => window.__pool.online().match && window.__pool.state() === "aim");
@@ -307,11 +309,13 @@ await scenario("friend match: a dropped connection shows a banner until the frie
 await scenario("friend match: cancelling while waiting closes the room", async (open) => {
   const a = await open();
   await a.click("#b-online");
+  await a.click("#b-invite");
   await a.waitForFunction(() => document.querySelector("#invite-code").textContent.length === 4);
   const code = await a.textContent("#invite-code");
   await a.click("#b-invite-cancel");
   check(await a.isVisible("#menu"), "Cancel goes back to the menu");
   const b = await open();
+  await b.click("#b-online");
   await b.fill("#join-code", code);
   await b.click("#b-join");
   await b.waitForFunction(() => /over|No game/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 });
@@ -366,11 +370,19 @@ await scenario("on phones, nothing covers the table", async (open) => {
 
 await scenario("menus fit or scroll on a phone held sideways", async (open) => {
   const p = await open({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
-  await p.locator("#b-room").scrollIntoViewIfNeeded();
-  const r = await p.locator("#b-room").boundingBox();
+  await p.locator("#menu [data-mode=practice]").scrollIntoViewIfNeeded();
+  const r = await p.locator("#menu [data-mode=practice]").boundingBox();
   check(r && r.y >= 0 && r.y + r.height <= 390, "the last menu button can be reached");
   await p.locator("#b-online").click();
-  check(await p.isVisible("#invite"), "and it works");
+  check(await p.isVisible("#online"), "the friend card opens");
+  await p.locator("#b-online-back").scrollIntoViewIfNeeded();
+  const back = await p.locator("#b-online-back").boundingBox();
+  check(back && back.y >= 0 && back.y + back.height <= 390, "its last button can be reached");
+  await p.locator("#b-online-back").click();
+  check(await p.isVisible("#menu") && await p.isHidden("#online"), "Back goes back to the menu");
+  await p.locator("#b-online").click();
+  await p.locator("#b-invite").click();
+  check(await p.isVisible("#invite"), "and inviting works");
 });
 
 console.log(failed ? `\n${failed} failed` : "\nAll passed");

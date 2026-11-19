@@ -186,6 +186,7 @@ function showInvite(text: string, code: string | null) {
   cpu = null;
   guide.hide();
   $("#menu").hidden = true;
+  $("#online").hidden = true;
   $("#invite").hidden = false;
   $("#invite-text").textContent = text;
   $("#invite-share").hidden = !code;
@@ -876,7 +877,7 @@ function showMenu() {
     leaveOnline();
   }
   clearTimeout(laterTimer);
-  state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; $("#invite").hidden = true; guide.hide();
+  state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; $("#invite").hidden = true; $("#online").hidden = true; guide.hide();
 }
 function showOver(title: string, why: string, rematch: boolean) {
   $("#over-title").textContent = title;
@@ -892,7 +893,7 @@ $("#b-rematch").addEventListener("click", () => {
   newMatch(breaker === 0 ? 1 : 0);
 });
 
-// Friend matches: name, host, join by code, the invite card.
+// Friend matches: their own card (name, invite, join by code), then the invite card.
 const nameInput = $<HTMLInputElement>("#name");
 nameInput.value = myName;
 nameInput.addEventListener("change", () => {
@@ -900,7 +901,9 @@ nameInput.addEventListener("change", () => {
   store.set("name", myName);
   link?.send({ t: "name", name: myName });
 });
-$("#b-online").addEventListener("click", hostMatch);
+$("#b-online").addEventListener("click", () => { $("#menu").hidden = true; $("#online").hidden = false; });
+$("#b-online-back").addEventListener("click", showMenu);
+$("#b-invite").addEventListener("click", hostMatch);
 const joinInput = $<HTMLInputElement>("#join-code");
 const joinTyped = () => {
   const code = joinInput.value.trim().toUpperCase();
@@ -959,7 +962,7 @@ function toggleSound() {
 const roomBtn = $("#b-room");
 function setRoom(on: boolean) {
   sound.setRoomTone(on);
-  roomBtn.textContent = `Room sound: ${on ? "on" : "off"}`;
+  roomBtn.classList.toggle("on", on);
   roomBtn.setAttribute("aria-pressed", String(on));
   store.set("room", on ? "1" : "0");
 }
