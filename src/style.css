@@ -149,8 +149,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border: 1px solid rgba(0, 0, 0, 0.45); border-radius: 18px; text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.menu .card button:not(.primary) { background: rgba(0, 0, 0, 0.26); }
-.menu .card button:not(.primary):hover { background: rgba(0, 0, 0, 0.36); }
+.menu .card button:not(.primary, .link) { background: rgba(0, 0, 0, 0.26); }
+.menu .card button:not(.primary, .link):hover { background: rgba(0, 0, 0, 0.36); }
 .menu h1 { margin: 0; font: 800 34px/1.1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.01em; }
 .menu p { margin: 0 0 6px; color: var(--muted); }
 .menu .soon { margin: 6px 0 0; font-size: 12px; }
@@ -175,7 +175,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: 13px; white-space: nowrap; pointer-events: none;
 }
 .net[hidden] { display: none; }
-/* A text link, for the least used choice and for going back. */
+/* A text link, for going back. */
 .menu .card button.link { margin-top: 4px; padding: 6px 12px; font-size: 14px; color: var(--muted); background: none; border-color: transparent; }
 .menu .card button.link:hover { color: var(--ink); }
 .menu button.primary { background: var(--accent); color: #1a1206; border-color: transparent; font-weight: 700; }
