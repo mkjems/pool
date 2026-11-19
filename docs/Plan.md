@@ -75,7 +75,10 @@ phase 6. The user found the old slide-and-shrink "very bad" and asked for realis
 
 **Pocket rejections, done 17 November** (the user loved the drops and asked for this): a ball hit too hard
 into a pocket can be thrown back out by the back of the pocket. In the physics, so the rules and the computer
-know. See phase 1.
+know. See phase 1. **Fixed 19 November:** a ball the physics had called down while heading back out (it sinks
+half a radius, then counts as potted) could ride up the lip in the drawn fall, roll on the cloth for two seconds
+and vanish (about 1 in 5 hard pots in a sweep). The drawn fall now keeps it in the pocket, and the physics only
+calls a ball down while it is over its opening (`tests/pocketfall.test.ts`).
 
 **Friend matches, built 17 November evening (phase 7), to pick up first.** The user stopped for the night;
 nothing is pushed or deployed. What works, tested: `server/relay.mjs` (rooms by 4-character code, seats with

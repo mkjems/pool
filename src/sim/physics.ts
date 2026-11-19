@@ -8,7 +8,7 @@ import {
   DT, E_BALL, EPS_V, EPS_W, G, LIP_DROP, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE, POCKET_E,
   CUSHION_COS, CUSHION_SIN, R, SPIN_DECEL, SQUIRT, eCushion, muBall,
 } from "./constants";
-import { TABLE, nearestPocket, openingAt, openingDist2, type Segment, type Point } from "./table";
+import { TABLE, openingAt, openingDist2, type Segment, type Point } from "./table";
 
 export interface Ball {
   /** 0 is the cue ball, 1-15 the object balls. */
@@ -371,8 +371,10 @@ export class Sim {
         if (p >= 0) b.air = 0;
         continue;
       }
-      if (0.5 * G * b.air * b.air >= LIP_DROP) { this.down(b, p >= 0 ? p : nearestPocket(b.x, b.y)); continue; }
-      if (p < 0) { b.air = -1; continue; } // back over the cloth before it sank
+      // Back over the cloth before it sank. Checked first: a ball that is down is always over its opening, so the
+      // drawn fall (src/render/pocketfall.ts) starts in the hole, never on the cloth.
+      if (p < 0) { b.air = -1; continue; }
+      if (0.5 * G * b.air * b.air >= LIP_DROP) { this.down(b, p); continue; }
       // The back of the pocket: the far side of the opening's rim. The ball's side meets it with its centre R inside.
       const P = TABLE.pockets[p], o = P.opening;
       const { d2, k } = openingDist2(o, b.x, b.y);

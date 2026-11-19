@@ -77,16 +77,23 @@ export class Fall {
     const k = Math.max(0, Math.min(1, ((p.x - o.ax) * dx + (p.y - o.ay) * dy) / (dx * dx + dy * dy)));
     const cx = o.ax + dx * k, cy = o.ay + dy * k;
     const ex = p.x - cx, ey = p.y - cy, ed = Math.hypot(ex, ey);
-    if (ed >= o.r) {
+    const ux = ex / Math.max(ed, 1e-9), uy = ey / Math.max(ed, 1e-9);
+    const qx = cx + ux * o.r, qy = cy + uy * o.r;
+    const underRail = Math.abs(qx) > HL - 1e-4 || Math.abs(qy) > HW - 1e-4;
+    if (!underRail && v.x * ux + v.y * uy > 0 && ed + Math.sqrt(R * R - Math.min(R * R, Math.max(p.z, 0) ** 2)) > o.r) {
+      // Heading back out over the lip on the cloth side. The physics has already called this ball down (it decides
+      // what gets thrown back out, see checkPockets in src/sim/physics.ts), so the lip may not lift it back onto
+      // the cloth, where it would roll on until the fall timed out and then vanish. It meets the edge square on, as
+      // a wall, and drops; its centre never leaves the opening.
+      const reach = Math.sqrt(R * R - Math.min(R * R, Math.max(p.z, 0) ** 2));
+      this.contact(-ux, -uy, 0, ed + reach - o.r, LIP);
+    } else if (ed >= o.r) {
       // On the cloth.
       if (p.z < R) this.contact(0, 0, 1, R - p.z, BED);
     } else {
       // The pocket's wall, as a profile in (distance from the opening's axis, height). It is straight down below
       // the cloth. On the cloth side of the pocket it ends at the lip; under the rails the facing goes on up to
       // the lip, leaning in over the hole as real facings do, so a ball riding up it is turned back down.
-      const ux = ex / Math.max(ed, 1e-9), uy = ey / Math.max(ed, 1e-9);
-      const qx = cx + ux * o.r, qy = cy + uy * o.r;
-      const underRail = Math.abs(qx) > HL - 1e-4 || Math.abs(qy) > HW - 1e-4;
       // Closest point of the profile to the ball's centre (rho = ed, z = p.z).
       let cr = o.r, cz = Math.min(p.z, 0);
       if (underRail && p.z > 0) {
