@@ -4,6 +4,7 @@
   --glass: rgba(18, 17, 16, 0.62);
   --edge: rgba(255, 240, 220, 0.12);
   --accent: #f0b54a;
+  --cloth: #1b6b45;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -141,20 +142,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .menu .card { margin: auto; }
 .menu .card {
   display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 260px; padding: 26px 28px;
-  /* Cloth green (CLOTHS.green in src/render/table.ts), lit from above like the table. */
-  --muted: #b9cfc0; --edge: rgba(230, 255, 240, 0.07);
-  background: radial-gradient(ellipse at 50% 30%, #237a50, #1b6b45 55%, #135236);
+  /* The table's cloth (--cloth, set from CLOTHS in src/render/table.ts as the Cloth button changes it), lit from
+     above like the table: lighter near the top, darker at the edges. */
+  --muted: rgba(236, 231, 220, 0.72); --edge: rgba(255, 255, 255, 0.07);
+  background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--cloth), #fff 9%), var(--cloth) 55%, color-mix(in srgb, var(--cloth), #000 28%));
   border: 1px solid rgba(0, 0, 0, 0.45); border-radius: 18px; text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.menu .card button:not(.primary) { background: rgba(4, 22, 13, 0.32); }
-.menu .card button:not(.primary):hover { background: rgba(4, 22, 13, 0.45); }
+.menu .card button:not(.primary) { background: rgba(0, 0, 0, 0.26); }
+.menu .card button:not(.primary):hover { background: rgba(0, 0, 0, 0.36); }
 .menu h1 { margin: 0; font: 800 34px/1.1 "Inter Tight", Inter, system-ui, sans-serif; letter-spacing: 0.01em; }
 .menu p { margin: 0 0 6px; color: var(--muted); }
 .menu .soon { margin: 6px 0 0; font-size: 12px; }
 .menu button { padding: 10px 16px; font-size: 15px; }
 .menu input {
-  font: inherit; font-size: 15px; color: var(--ink); background: rgba(4, 22, 13, 0.32); border: 1px solid var(--edge);
+  font: inherit; font-size: 15px; color: var(--ink); background: rgba(0, 0, 0, 0.26); border: 1px solid var(--edge);
   border-radius: 999px; padding: 9px 14px; min-width: 0; -webkit-user-select: text; user-select: text;
 }
 .menu input::placeholder { color: var(--muted); }
@@ -214,4 +216,4 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .levels { display: flex; gap: 4px; justify-content: center; margin: -4px 0 6px; }
 .menu .card .levels button { padding: 4px 12px; font-size: 13px; color: var(--muted); background: none; border-color: transparent; }
 .menu .card .levels button:hover { color: var(--ink); }
-.menu .card .levels button[aria-checked="true"] { color: var(--accent); border-color: rgba(240, 181, 74, 0.55); background: rgba(4, 22, 13, 0.25); }
+.menu .card .levels button[aria-checked="true"] { color: var(--accent); border-color: rgba(240, 181, 74, 0.55); background: rgba(0, 0, 0, 0.2); }

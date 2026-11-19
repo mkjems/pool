@@ -67,6 +67,7 @@ const prevX = new Float64Array(16), prevY = new Float64Array(16);
 // Frame times, to lower the resolution if the device can't keep up.
 const frameTimes: number[] = [];
 table.setCloth(cloth);
+document.documentElement.style.setProperty("--cloth", CLOTHS[cloth]); // the menu cards wear the same cloth
 
 const shotSpeed = (p: number) => MAX_SPEED * Math.pow(p, 1.6);
 const powerFor = (speed: number) => Math.pow(Math.min(1, speed / MAX_SPEED), 1 / 1.6);
@@ -936,6 +937,7 @@ function cycleCloth() {
   const keys = Object.keys(CLOTHS) as Cloth[];
   cloth = keys[(keys.indexOf(cloth) + 1) % keys.length];
   table.setCloth(cloth);
+  document.documentElement.style.setProperty("--cloth", CLOTHS[cloth]);
   store.set("cloth", cloth);
   toast(`Cloth: ${cloth}`);
 }
