@@ -451,6 +451,7 @@ function onEvent(e: SimEvent) {
       const b = s.balls[e.a];
       ballViews[e.a].fall = new Fall(e.pocket, b.x, b.y, e.vx, e.vy, e.wx, e.wy, e.wz, e.air);
       newFalls.push({ fall: ballViews[e.a].fall!, t: e.t });
+      updateScore();
       break;
     }
   }
@@ -547,18 +548,27 @@ function placeCueAt(p: THREE.Vector2) {
 
 // ------------------------------------------------------------------ the scoreboard
 
+/**
+ * Each player's group, the balls still to pot in colour and the potted ones faded, then the 8 once it is theirs.
+ * While the table is open, the balls potted so far stand between the players. Called again as each ball drops.
+ */
 function updateScore() {
   if (!ruled()) return;
+  const cur = sim ? sim.balls : balls;
   for (const el of document.querySelectorAll<HTMLElement>(".score .p")) {
     const p = Number(el.dataset.p) as Player;
     el.classList.toggle("turn", game.turn === p && game.winner === null);
     const tray = el.querySelector<HTMLElement>(".tray")!;
     tray.innerHTML = "";
     if (!game.groups) { tray.textContent = game.breakShot && game.turn === p ? "break" : "open"; continue; }
-    const left = remaining(balls, game.groups[p]);
-    if (left.length === 0) { tray.appendChild(miniBall(8)); continue; }
-    for (const id of left) tray.appendChild(miniBall(id));
+    const g = game.groups[p];
+    for (let id = 1; id <= 15; id++) if (groupOf(id) === g) tray.appendChild(miniBall(id, !cur[id].on));
+    if (remaining(cur, g).length === 0) tray.appendChild(miniBall(8, !cur[8].on));
   }
+  const potted = $("#potted");
+  potted.innerHTML = "";
+  if (!game.groups) for (const b of cur) if (b.id !== 0 && !b.on) potted.appendChild(miniBall(b.id));
+  potted.hidden = potted.childElementCount === 0;
 }
 
 /** Stripes: a coloured band between white caps; solids: all colour. Flat, always facing you. */
@@ -567,11 +577,12 @@ function flatBall(id: number) {
   return isStripe(id) ? `linear-gradient(#f6f2e8 0 25%, ${c} 25% 75%, #f6f2e8 75%)` : c;
 }
 
-function miniBall(id: number): HTMLElement {
+/** A ball in the scoreboard; `gone`: potted, drawn faded. */
+function miniBall(id: number, gone = false): HTMLElement {
   const s = document.createElement("span");
-  s.className = "mini";
+  s.className = gone ? "mini gone" : "mini";
   s.style.background = flatBall(id);
-  s.title = String(id);
+  s.title = gone ? `${id}, potted` : String(id);
   return s;
 }
 
@@ -1007,6 +1018,12 @@ function fitView() {
   guideDirty = true;
 }
 window.addEventListener("resize", fitView);
+// The score grows as balls are potted (on a phone held upright, a row more): keep the controls clear of it.
+let scoreSize = "";
+new ResizeObserver(() => {
+  const r = $("#score").getBoundingClientRect(), size = `${Math.round(r.width)}x${Math.round(r.height)}`;
+  if (size !== scoreSize) { scoreSize = size; fitView(); }
+}).observe($("#score"));
 fitView();
 
 let toastTimer = 0;

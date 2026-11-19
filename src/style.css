@@ -105,15 +105,25 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .score[hidden] { display: none; }
 .score .p {
   display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
-  background: var(--glass); border: 1px solid var(--edge); opacity: 0.55; transition: opacity 0.2s, border-color 0.2s;
+  background: var(--glass); border: 1px solid var(--edge); transition: border-color 0.2s;
 }
-.score .p.turn { opacity: 1; border-color: var(--accent); box-shadow: 0 0 14px rgba(240, 181, 74, 0.25); }
+/* Whose turn: the lit border. The other player's name dims, but not the balls, so potted ones stay readable. */
+.score .p.turn { border-color: var(--accent); box-shadow: 0 0 14px rgba(240, 181, 74, 0.25); }
+.score .p:not(.turn) .name { opacity: 0.55; }
 .score .name { font-weight: 600; font-size: 13px; white-space: nowrap; }
 .score .tray { display: flex; gap: 3px; min-height: 14px; align-items: center; color: var(--muted); font-size: 12px; }
 .mini {
   width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex: none;
   box-shadow: inset -2px -2px 3px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.22);
 }
+/* Potted: faded, still its own colour so you can tell which. */
+.mini.gone { opacity: 0.38; box-shadow: none; }
+/* Balls potted while the table is open, between the players. */
+.potted {
+  display: flex; align-items: center; gap: 3px; padding: 5px 10px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--edge);
+}
+.potted[hidden] { display: none; }
 .labels { position: absolute; inset: 0; pointer-events: none; }
 .label {
   position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
@@ -175,9 +185,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .bar nav { gap: 4px; }
   .brand { font-size: 15px; }
 }
-/* A phone held upright: the spin button joins the score along the bottom, leaving the table the full width. */
+/* A phone held upright: the spin button joins the score along the bottom, leaving the table the full width.
+   Two full trays (8 balls each) don't fit side by side, so the players stand one above the other, on the left. */
 @media (max-width: 560px) and (orientation: portrait) {
   .spin { --hud-edge: bottom; }
+  .score { left: max(10px, env(safe-area-inset-left)); transform: none; flex-direction: column; align-items: flex-start; gap: 5px; }
 }
 /* A phone held sideways: height is what's scarce, so the buttons and the score stand in a column on the left. */
 @media (max-height: 560px) and (orientation: landscape) {
@@ -186,6 +198,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .score { left: max(10px, env(safe-area-inset-left)); transform: none; flex-direction: column; align-items: flex-start; --hud-edge: left; }
   /* A fixed width, name above the balls, so the column doesn't grow into the table as the game goes on. */
   .score .p { flex-direction: column; align-items: flex-start; gap: 3px; width: 116px; }
+  .score .tray, .potted { gap: 2px; }
+  .potted { max-width: 116px; flex-wrap: wrap; padding: 5px 9px; }
+  .mini { width: 10px; height: 10px; }
   .score .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 }
 .bar nav button.on { border-color: var(--accent); color: var(--accent); }

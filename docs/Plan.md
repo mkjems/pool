@@ -80,6 +80,12 @@ half a radius, then counts as potted) could ride up the lip in the drawn fall, r
 and vanish (about 1 in 5 hard pots in a sweep). The drawn fall now keeps it in the pocket, and the physics only
 calls a ball down while it is over its opening (`tests/pocketfall.test.ts`).
 
+**Potted balls on the scoreboard, 19 November** (the user asked to see which balls have gone down): once the
+groups are decided each player's tray shows all seven of their balls, the potted ones faded, then the 8; while
+the table is open the balls potted so far stand in a small pill between the players. It updates as each ball
+drops. On a phone held upright the players now stand one above the other (two full trays didn't fit beside
+the spin button). Practice mode has no scoreboard, so nothing there yet.
+
 **Friend matches, built 17 November evening (phase 7), to pick up first.** The user stopped for the night;
 nothing is pushed or deployed. What works, tested: `server/relay.mjs` (rooms by 4-character code, seats with
 rejoin keys, keeps the match's start and latest shot; in Vite dev and preview through a plugin in
