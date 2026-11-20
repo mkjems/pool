@@ -59,8 +59,12 @@ button {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-button:hover {
+button:hover:not(:disabled) {
   border-color: rgba(240, 181, 74, 0.6);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 button:focus-visible {
   outline: 2px solid var(--accent);
@@ -290,6 +294,12 @@ button:focus-visible {
   gap: 8px;
   pointer-events: none;
   --hud-edge: top;
+}
+/* Where the buttons would reach it (fitView): at the top right instead. */
+.score.aside {
+  left: auto;
+  right: max(18px, env(safe-area-inset-right));
+  transform: none;
 }
 .score[hidden] {
   display: none;
@@ -528,6 +538,39 @@ button:focus-visible {
   pointer-events: none;
 }
 .net[hidden] {
+  display: none;
+}
+/* While a replay plays, where the toasts appear: a red light, as on a television replay. */
+.replay-badge {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.replay-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e2533a;
+  animation: replay-blink 1.2s ease-in-out infinite;
+}
+@keyframes replay-blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+.replay-badge[hidden] {
   display: none;
 }
 /* A text link, for going back. */

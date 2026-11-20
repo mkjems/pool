@@ -662,6 +662,29 @@ Sizes are relative: S, M, L.
 Retry any shot, coach and hints, share a shot as a link, shot of the day, trick shots and drills, 9-ball,
 table choices, play by post, masse and jump shots.
 
+**Replays and the cinematic break** (20 November; the user chose these to make the game show itself off, and
+to make clips for spreading the word). Four steps:
+
+- [x] 1. Replay the last shot from the top view, in slow motion (20 November). Replay button in the top bar
+  (R), and "Watch the shot again" on the game-over card. Nothing is recorded but the position, the shot and how
+  the balls were turned (`struck`, `lastPlayed` in `src/main.ts`): the replay simulates the shot again, so it
+  ends exactly where the shot did (the browser test checks that, bit for bit). The cue draws back and strikes;
+  0.35× until the last ball is down (or 0.8 s after the first contact; at most 3 simulated seconds), then
+  speeds up smoothly to 2.5× for the rolling out; a 0.6 s hold; back. Sounds keep their timing (`playHeard`
+  takes a rate). A click or tap on the table, Esc or R skips it. Not offered while someone else is to shoot
+  or the game is about to move on (re-rack, game-over card coming); a new game forgets the last shot.
+  - Also: on laptops the top-bar buttons ran into the centred score (1024 px always, 1280 px once the
+    trays filled); now the score moves to the top right when they would meet (`.score.aside`, fitView).
+  - To judge: the slow-motion speed and when it speeds up; whether the sounds should drop in pitch in slow
+    motion (they don't yet).
+- [ ] 2. A camera director and a low camera: the winning shot replayed automatically, from low, ending on the
+  pocket. Always ends on the fitted top view. Needs visible lamp shades above the table and a look at the cloth
+  and shadows at grazing angles. HUD, labels and markers hidden while it plays.
+- [ ] 3. Cinematic break: low behind the cue ball, slow motion as the rack opens, rising into the top view.
+  First break of a session; an option to turn it off.
+- [ ] 4. Clips for posting: a `?test` hook and a script that renders a replay frame by frame at an exact
+  60 fps in headless Chromium and joins the frames with ffmpeg. Share-a-shot links on the same data.
+
 ## Risks
 
 - **Feel.** Physics can be correct and still feel wrong: cloth too fast, cushions dead. Tuning takes rounds of

@@ -36,6 +36,7 @@
       <a class="brand" href="https://mkjems.dk/" title="More games at mkjems.dk">Pool</a>
       <nav>
         <button id="b-menu" title="Menu">Menu</button>
+        <button id="b-replay" title="Watch the last shot again, in slow motion (R)" disabled>Replay</button>
         <button id="b-labels" title="Show ball numbers (hold Space)">Numbers</button>
         <button id="b-guide" title="Aim guide (G)">Guide: full</button>
         <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
@@ -64,6 +65,7 @@
     </div>
     <div id="toast" class="toast" role="status"></div>
     <div id="net" class="net" role="status" hidden></div>
+    <div id="replay-badge" class="replay-badge" hidden></div>
     <div id="menu" class="menu">
       <div class="card">
         <h1>Pool</h1>
@@ -111,6 +113,7 @@
         <h1 id="over-title">Player 1 wins</h1>
         <p id="over-why"></p>
         <button id="b-rematch" class="primary">Rematch</button>
+        <button id="b-over-replay">Watch the shot again</button>
         <button id="b-over-menu">Menu</button>
       </div>
     </div>

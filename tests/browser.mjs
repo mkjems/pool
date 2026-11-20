@@ -208,6 +208,10 @@ await scenario("calling the 8 by tapping a pocket; potting it wins; Rematch", as
   await played(p);
   await p.waitForSelector("#over:not([hidden])", { timeout: 5000 });
   check((await p.textContent("#over-title")) === "Player 1 wins", "the 8 in the called pocket wins", await p.textContent("#over-title"));
+  await p.click("#b-over-replay");
+  check((await pool(p, () => window.__pool.state())) === "replay" && (await p.isHidden("#over")), "the winning shot can be watched again");
+  await p.waitForSelector("#over:not([hidden])", { timeout: 20000 });
+  check((await pool(p, () => window.__pool.state())) === "over", "then the card comes back");
   await p.click("#b-rematch");
   const g = await pool(p, () => window.__pool.game());
   check(g.breakShot && g.winner === null && (await p.isHidden("#over")), "Rematch starts a new game");
@@ -335,6 +339,44 @@ await scenario("friend match: both press Rematch at once and still play the same
   await agree(a, b, "the same rack");
 });
 
+await scenario("replay: the last shot again in slow motion, ending where it did; a click skips it", async (open) => {
+  const p = await open();
+  await p.click("[data-mode=practice]");
+  check(await p.isDisabled("#b-replay"), "nothing to replay before the first shot");
+  // Ball 1 into the top-right corner, ball 2 left on the table so it doesn't re-rack.
+  const u = Math.SQRT1_2, P = { x: 0.9905 - 0.0414, y: 0.49525 - 0.0414 };
+  await pool(p, ([P, u]) => {
+    window.__pool.place([[0, P.x - u * 0.5, P.y - u * 0.5], [1, P.x - u * 0.2, P.y - u * 0.2], [2, -0.6, -0.3]]);
+    window.__pool.aimAt(P.x - u * 0.2, P.y - u * 0.2);
+    window.__pool.shoot(0.35);
+  }, [P, u]);
+  await played(p);
+  const after = await pool(p, () => window.__pool.balls());
+  check(!after[1].on, "ball 1 went down");
+  check(await p.isEnabled("#b-replay"), "Replay is offered after the shot");
+  const t0 = Date.now();
+  await p.click("#b-replay");
+  check((await pool(p, () => window.__pool.state())) === "replay" && (await p.isVisible("#replay-badge")), "the replay plays, with its badge");
+  const start = await pool(p, () => window.__pool.balls());
+  check(start[1].on && Math.hypot(start[1].x - (P.x - u * 0.2), start[1].y - (P.y - u * 0.2)) < 1e-9, "it starts from the position before the shot");
+  await p.waitForFunction(() => window.__pool.replayPhase() === "hold", null, { timeout: 20000 });
+  const end = await pool(p, () => window.__pool.balls());
+  check(JSON.stringify(end) === JSON.stringify(after), "it ends exactly where the shot ended");
+  await waitState(p, "aim", 5000);
+  check(Date.now() - t0 > 2500, "in slow motion", `${Date.now() - t0} ms`);
+  check(await p.isHidden("#replay-badge"), "the badge goes");
+  check(JSON.stringify(await pool(p, () => window.__pool.balls())) === JSON.stringify(after), "the table is as it was");
+  // Again, and a click on the table skips it.
+  await pool(p, () => window.__pool.replay());
+  check((await pool(p, () => window.__pool.state())) === "replay", "a second replay");
+  await p.mouse.click(640, 400);
+  check((await pool(p, () => window.__pool.state())) === "aim", "a click skips it");
+  check(JSON.stringify(await pool(p, () => window.__pool.balls())) === JSON.stringify(after), "and the table is as it was");
+  await p.click("#b-menu");
+  await p.click("[data-mode=practice]");
+  check(await p.isDisabled("#b-replay"), "a new game forgets the last shot");
+});
+
 await scenario("the menu stays open when opened just after clearing the table", async (open) => {
   const p = await open();
   await p.click("[data-mode=practice]");
@@ -363,6 +405,20 @@ await scenario("on phones, nothing covers the table", async (open) => {
       if (!r) continue;
       const overlap = r.x < t.r && r.x + r.width > t.l && r.y < t.b && r.y + r.height > t.t;
       check(!overlap, `${sel} stays off the table on a ${w}×${h} screen`, JSON.stringify(r));
+    }
+    await p.context().close();
+  }
+});
+
+await scenario("on laptops, the buttons and the score don't overlap", async (open) => {
+  for (const w of [1024, 1280, 1440]) {
+    const p = await open({ viewport: { width: w, height: 800 } });
+    await p.click("[data-mode=cpu]");
+    for (const groups of [null, ["solids", "stripes"]]) { // open table, then both trays full
+      await pool(p, (g) => window.__pool.setGame({ groups: g, breakShot: false }), groups);
+      await p.waitForTimeout(50);
+      const nav = await p.locator(".bar nav").boundingBox(), sc = await p.locator("#score").boundingBox();
+      check(nav.x + nav.width <= sc.x && sc.x + sc.width <= w, `buttons and score apart at ${w} px wide`, JSON.stringify({ nav, sc }));
     }
     await p.context().close();
   }

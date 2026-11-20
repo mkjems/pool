@@ -19,7 +19,7 @@ import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
 import { Link, savedSeat, type AimMsg, type FromRelay, type ShotMsg, type Start } from "./net/net";
 
-type State = "menu" | "aim" | "stroke" | "run" | "over";
+type State = "menu" | "aim" | "stroke" | "run" | "over" | "replay";
 type Mode = "practice" | "pass" | "cpu" | "online";
 type GuideLevel = "full" | "short" | "off";
 
@@ -55,6 +55,19 @@ let guideLevel: GuideLevel = (store.get("guide") as GuideLevel) ?? "full";
 let cloth: Cloth = (store.get("cloth") as Cloth) ?? "green";
 let strokeT = 0;
 let pendingShot: Shot | null = null;
+/** The shot as it was struck: the position, the shot and how the balls were turned, for its replay. */
+let struck: { before: Ball[]; shot: Shot; turns: THREE.Quaternion[] } | null = null;
+/** A shot played out: where from, the shot, how the balls were turned, and what happened (to pace the replay). */
+interface Played { before: Ball[]; shot: Shot; turns: THREE.Quaternion[]; events: SimEvent[] }
+/** The last shot, to watch again. A new game forgets it. */
+let lastPlayed: Played | null = null;
+/**
+ * Watching it: the cue drawn back ("lead"), the stroke, the balls running, a moment's hold at the end. In slow
+ * motion until what matters is over (the last ball down, or a little after the first contact), then faster.
+ * `from`: the state to go back to; `after`: how the balls were turned before it.
+ */
+interface Replaying { p: Played; from: State; phase: "lead" | "stroke" | "run" | "hold"; t: number; rate: number; slowUntil: number; after: THREE.Quaternion[] }
+let replaying: Replaying | null = null;
 let acc = 0;
 let guideDirty = true;
 let guideFirst = -1; // the ball the guide says gets hit first
@@ -184,6 +197,7 @@ function connect(l: Link) {
 
 function showInvite(text: string, code: string | null) {
   // Whatever was on the table stops (the computer must not play on behind the card).
+  endReplay();
   state = "menu";
   cpu = null;
   guide.hide();
@@ -296,6 +310,7 @@ function onNet(m: FromRelay) {
       link?.end();
       link = null;
       netBanner(null);
+      endReplay();
       if (state !== "menu") { state = "over"; showOver(`${friendName()} left`, "The match is over.", false); }
       break;
     case "error":
@@ -380,11 +395,17 @@ function resetViews() {
 let laterTimer = 0;
 function later(fn: () => void, ms: number) {
   clearTimeout(laterTimer);
-  laterTimer = window.setTimeout(fn, ms);
+  laterTimer = window.setTimeout(() => { laterTimer = 0; fn(); }, ms);
+}
+function cancelLater() {
+  clearTimeout(laterTimer);
+  laterTimer = 0;
 }
 
 function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0) {
-  clearTimeout(laterTimer);
+  endReplay();
+  lastPlayed = null;
+  cancelLater();
   mode = m;
   cpu = null;
   if (mode !== "online") names = mode === "cpu" ? ["You", "Computer"] : ["Player 1", "Player 2"];
@@ -449,7 +470,7 @@ function onEvent(e: SimEvent) {
   const s = sim!;
   heard.push({ e, x: e.type === "pocket" ? TABLE.pockets[e.pocket].hx : s.balls[e.a].x, down: s.balls.filter((b) => !b.on).length - 1 });
   switch (e.type) {
-    case "cue": if (e.miscue) toast("Miscue"); break;
+    case "cue": if (e.miscue && state !== "replay") toast("Miscue"); break;
     case "pocket": {
       // The fall into the pocket, drawn from the ball's motion as it dropped. It starts at e.t; playHeard sets
       // how far along that is on screen.
@@ -465,10 +486,11 @@ function onEvent(e: SimEvent) {
 /**
  * Sound each event at its own moment: the frame ran the physics up to sim.t, and the balls on screen are drawn at
  * `shown`; an event at e.t is heard (e.t - shown) from now, plus a small lead so none falls in the past.
+ * `rate`: simulated seconds per real second (below 1 in a slow-motion replay).
  */
-function playHeard(shown: number) {
+function playHeard(shown: number, rate = 1) {
   for (const { e, x, down } of heard) {
-    const d = 0.03 + e.t - shown;
+    const d = 0.03 + (e.t - shown) / rate;
     if (e.type === "ball") sound.ball(e.speed, x, d);
     else if (e.type === "cushion") sound.cushion(e.speed, x, d);
     else if (e.type === "cue") sound.cue(e.speed, e.miscue, d);
@@ -493,6 +515,7 @@ function respawnCue() {
 
 function endOfShot() {
   const events = sim!.events;
+  if (struck) lastPlayed = { ...struck, events };
   balls = sim!.balls;
   sim = null;
   tip = { side: 0, height: 0 };
@@ -558,7 +581,7 @@ function placeCueAt(p: THREE.Vector2) {
  * While the table is open, the balls potted so far stand between the players. Called again as each ball drops.
  */
 function updateScore() {
-  if (!ruled()) return;
+  if (!ruled() || state === "replay") return;
   const cur = sim ? sim.balls : balls;
   for (const el of document.querySelectorAll<HTMLElement>(".score .p")) {
     const p = Number(el.dataset.p) as Player;
@@ -737,6 +760,7 @@ function pocketNear(px: number, py: number): number {
 canvas.addEventListener("pointerdown", (e) => {
   sound.haptics = e.pointerType === "touch";
   sound.unlock();
+  if (state === "replay") { endReplay(); return; }
   if (state !== "aim" || watching()) return;
   canvas.setPointerCapture(e.pointerId);
   // The right button opens the spin pad (a press during a pull cancels it, in pointermove: a second button
@@ -880,13 +904,15 @@ function showMenu() {
     if (mode === "online" && match && game.winner === null && !confirm(`Leave the match with ${names[1 - seat]}?`)) return;
     leaveOnline();
   }
-  clearTimeout(laterTimer);
+  endReplay();
+  cancelLater();
   state = "menu"; $("#menu").hidden = false; $("#over").hidden = true; $("#invite").hidden = true; $("#online").hidden = true; guide.hide();
 }
 function showOver(title: string, why: string, rematch: boolean) {
   $("#over-title").textContent = title;
   $("#over-why").textContent = why;
   $("#b-rematch").hidden = !rematch;
+  $("#b-over-replay").hidden = !lastPlayed;
   $("#over").hidden = false;
 }
 $("#b-menu").addEventListener("click", showMenu);
@@ -985,7 +1011,8 @@ window.addEventListener("keydown", (e) => {
   if (k === "g") guideBtn.click();
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
-  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; }
+  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; endReplay(); }
+  else if (k === "r" && !e.repeat) replayBtn.click();
   else if (watching()) return;
   else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
   else if (k === "w") setTip(tip.side, tip.height + 0.1);
@@ -1011,6 +1038,12 @@ function fitView() {
     power$.style.top = `${Math.min(innerHeight, ...row) - 8 - power$.offsetHeight}px`;
   } else power$.style.top = "";
   setPowerUI(power);
+  // Big screens: the score stands centred at the top, unless the buttons reach it; then at the top right.
+  const score = $("#score");
+  score.classList.remove("aside");
+  if (Math.min(innerWidth, innerHeight) > 560 && !score.hidden && score.getBoundingClientRect().left < $(".bar nav").getBoundingClientRect().right + 16) {
+    score.classList.add("aside");
+  }
   if (Math.min(innerWidth, innerHeight) < 560) {
     const ins = { top: 0, right: 0, bottom: 0, left: 0 };
     for (const el of document.querySelectorAll<HTMLElement>(".bar, .score, .power, .spin")) {
@@ -1043,7 +1076,99 @@ function toast(msg: string) {
   toastTimer = window.setTimeout(() => t.classList.remove("show"), 2600);
 }
 
+// ------------------------------------------------------------------ replay
+
+const REPLAY_SLOW = 0.35, REPLAY_FAST = 2.5;
+const replayBtn = $<HTMLButtonElement>("#b-replay");
+const replayBadge = $("#replay-badge");
+
+/** Not while someone else is to shoot, nor while the game is about to move on (re-rack, game-over card). */
+function canReplay() {
+  return !!lastPlayed && !laterTimer && (state === "over" || (state === "aim" && !watching()));
+}
+
+/** Simulated seconds of slow motion: up to the last ball down, or the first contact, and a little after. */
+function slowPart(events: readonly SimEvent[]) {
+  let pot = -1, contact = -1;
+  for (const e of events) {
+    if (e.type === "pocket") pot = e.t;
+    else if (e.type === "ball" && contact < 0) contact = e.t;
+  }
+  return Math.min(3, pot >= 0 ? pot + 0.6 : contact >= 0 ? contact + 0.8 : 0.8);
+}
+
+function startReplay() {
+  if (!canReplay()) return;
+  const p = lastPlayed!;
+  sound.unlock();
+  replaying = { p, from: state, phase: "lead", t: 0, rate: REPLAY_SLOW, slowUntil: slowPart(p.events), after: ballViews.map((v) => v.mesh.quaternion.clone()) };
+  state = "replay";
+  sim = new Sim(p.before);
+  sim.onEvent = onEvent;
+  acc = 0;
+  for (const b of sim.balls) { prevX[b.id] = b.x; prevY[b.id] = b.y; }
+  ballViews.forEach((v, i) => v.mesh.quaternion.copy(p.turns[i]));
+  resetViews();
+  power = 0; setPowerUI(0); mouseDown = null; touch = null; dragging = false;
+  spinPad.hidden = true;
+  $("#over").hidden = true;
+  $("#toast").classList.remove("show");
+  replayBadge.hidden = false;
+  replayBtn.classList.add("on");
+}
+
+/** Back to the table as it is. The replay ends where the shot did, so nothing jumps (but a re-placed cue ball). */
+function endReplay() {
+  const r = replaying;
+  if (!r) return;
+  replaying = null;
+  sim = null;
+  heard.length = 0;
+  newFalls.length = 0;
+  resetViews();
+  ballViews.forEach((v, i) => v.mesh.quaternion.copy(r.after[i]));
+  state = r.from;
+  if (state === "over") $("#over").hidden = false;
+  replayBadge.hidden = true;
+  replayBtn.classList.remove("on");
+  guideDirty = true;
+}
+
+function runReplay(dt: number) {
+  const r = replaying!;
+  r.t += dt;
+  if (r.phase === "lead") {
+    if (r.t >= 0.75) { r.phase = "stroke"; r.t = 0; }
+  } else if (r.phase === "stroke") {
+    if (r.t * REPLAY_SLOW >= 0.07) { sim!.strike(r.p.shot); r.phase = "run"; r.t = 0; }
+  } else if (r.phase === "run") {
+    // Past the part that matters: speed up smoothly over about half a second.
+    if (sim!.t > r.slowUntil) r.rate = Math.min(REPLAY_FAST, r.rate + dt * 4.5);
+    runSim(dt * r.rate, r.rate);
+    if (!sim!.moving() && !ballViews.some((v) => v.fall)) { r.phase = "hold"; r.t = 0; }
+  } else if (r.t >= 0.6) endReplay();
+}
+
+replayBtn.addEventListener("click", () => (state === "replay" ? endReplay() : startReplay()));
+$("#b-over-replay").addEventListener("click", startReplay);
+replayBadge.textContent = matchMedia("(pointer: coarse)").matches ? "Replay · tap to skip" : "Replay · click to skip";
+
 // ------------------------------------------------------------------ frame loop
+
+/** Run the physics `simDt` further, in its fixed steps; the balls turn, the sounds are scheduled. */
+function runSim(simDt: number, rate = 1) {
+  const s = sim!;
+  acc += simDt;
+  let n = 0;
+  while (acc >= DT && n < 80) {
+    for (const b of s.balls) { prevX[b.id] = b.x; prevY[b.id] = b.y; }
+    s.step();
+    for (const b of s.balls) if (b.on) turnBall(ballViews[b.id].mesh, b.wx, b.wy, b.wz, DT);
+    acc -= DT;
+    n++;
+  }
+  playHeard(s.t - DT + acc, rate);
+}
 
 /** Too slow for a minute's worth of frames? Draw at a lower resolution (never below half). */
 function adaptQuality(raw: number) {
@@ -1076,6 +1201,7 @@ function frame(now: number) {
     // The cue swings forward from where it was pulled to, then strikes.
     strokeT += dt;
     if (strokeT >= 0.07) {
+      struck = { before: cloneBalls(balls), shot: pendingShot, turns: ballViews.map((v) => v.mesh.quaternion.clone()) };
       sim = new Sim(balls);
       sim.onEvent = onEvent;
       sim.strike(pendingShot);
@@ -1086,19 +1212,13 @@ function frame(now: number) {
     }
   }
   if (state === "run" && sim) {
-    acc += dt;
-    let n = 0;
-    while (acc >= DT && n < 80) {
-      for (const b of sim.balls) { prevX[b.id] = b.x; prevY[b.id] = b.y; }
-      sim.step();
-      for (const b of sim.balls) if (b.on) turnBall(ballViews[b.id].mesh, b.wx, b.wy, b.wz, DT);
-      acc -= DT;
-      n++;
-    }
-    playHeard(sim.t - DT + acc);
+    runSim(dt);
     // The shot ends when everything is still and every potted ball has dropped out of sight.
     if (!sim.moving() && !ballViews.some((v) => v.fall)) endOfShot();
   }
+  // Simulated time this frame: slower in a replay.
+  const simDt = replaying ? dt * replaying.rate : dt;
+  if (replaying) runReplay(dt);
 
   const cur = sim ? sim.balls : balls;
   const alpha = sim ? Math.min(1, acc / DT) : 1;
@@ -1116,7 +1236,7 @@ function frame(now: number) {
     } else if (v.fall) {
       // Into the pocket (src/render/pocketfall.ts).
       const f = v.fall;
-      if (!f.fresh) f.target += dt;
+      if (!f.fresh) f.target += simDt;
       f.fresh = false;
       if (f.target < 0) {
         v.mesh.position.set(f.p.x + f.v.x * f.target, f.p.y + f.v.y * f.target, R);
@@ -1145,11 +1265,20 @@ function frame(now: number) {
   markers.setHand(balls[0].x, balls[0].y, aiming && ruled() && !watching() && inHand() !== "none", clock);
   updateLabels(cur);
 
-  const pull = state === "stroke"
-    ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25)
-    : 0.03 + power * 0.25;
-  const cueShown = (aiming || state === "stroke") && balls[0].on && !dragging;
-  cue.set(balls, aim.x, aim.y, pull, tip.side, tip.height, cueShown);
+  if (replaying) {
+    // The replay's cue: drawn back, then the stroke, from where the shot was played.
+    const r = replaying, s = r.p.shot;
+    const back = r.phase === "lead" ? easeInOut(Math.min(1, r.t / 0.45)) : r.phase === "stroke" ? Math.max(0, 1 - (r.t * REPLAY_SLOW) / 0.07) : 0;
+    cue.set(r.p.before, s.dx, s.dy, 0.03 + back * (0.02 + (s.speed / MAX_SPEED) * 0.25), s.side, s.height, r.phase === "lead" || r.phase === "stroke");
+  } else {
+    const pull = state === "stroke"
+      ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25)
+      : 0.03 + power * 0.25;
+    const cueShown = (aiming || state === "stroke") && balls[0].on && !dragging;
+    cue.set(balls, aim.x, aim.y, pull, tip.side, tip.height, cueShown);
+  }
+  const canWatch = canReplay() || state === "replay";
+  if (replayBtn.disabled === canWatch) replayBtn.disabled = !canWatch;
 
   view.renderer.render(view.scene, view.camera);
   requestAnimationFrame(frame);
@@ -1171,6 +1300,8 @@ if (new URLSearchParams(location.search).has("test")) {
     quality: () => view.quality,
     online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names, queued: remoteShots.length }),
     timeScale: (k: number) => { timeScale = k; },
+    replay: () => startReplay(),
+    replayPhase: () => replaying?.phase ?? null,
     step: (seconds: number) => { manualTime += seconds; },
     falls: () => ballViews.filter((v) => v.fall).map((v) => ({ id: v.id, target: v.fall!.target, z: v.fall!.p.z, done: v.fall!.done })),
     /** Render now and return a square crop around a screen point (CSS px), as a PNG data URL. */
