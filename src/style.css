@@ -608,6 +608,21 @@ button:focus-visible {
   white-space: nowrap;
   pointer-events: none;
 }
+/* Why it is replayed (a highlight): "Bank shot". */
+.replay-badge .why {
+  font-weight: 600;
+  padding-left: 8px;
+  border-left: 1px solid var(--edge);
+}
+.replay-badge .why[hidden] {
+  display: none;
+}
+/* A phone: the reason takes the hint's place (a tap still skips). */
+@media (max-width: 520px) {
+  .replay-badge:has(.why:not([hidden])) .hint {
+    display: none;
+  }
+}
 .replay-badge .speed {
   color: var(--muted);
   transition: color 0.3s;

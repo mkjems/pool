@@ -8,6 +8,7 @@ import { cueTilt } from "./sim/cue";
 import { Sim, cloneBalls, fingerprint, type Ball, type Shot, type SimEvent } from "./sim/physics";
 import { ball, rack8, rng } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
+import { HIGHLIGHT, highlight, type Highlight } from "./sim/highlight";
 import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
 import { Director, pose } from "./render/director";
@@ -62,8 +63,9 @@ let strokeT = 0;
 let pendingShot: Shot | null = null;
 /** The shot as it was struck: the position, the shot and how the balls were turned, for its replay. */
 let struck: { before: Ball[]; shot: Shot; turns: THREE.Quaternion[] } | null = null;
-/** A shot played out: where from, the shot, how the balls were turned, and what happened (to pace the replay). */
-interface Played { before: Ball[]; shot: Shot; turns: THREE.Quaternion[]; events: SimEvent[] }
+/** A shot played out: where from, the shot, how the balls were turned, and what happened (to pace the replay);
+ * what made it special, if anything (src/sim/highlight.ts; not in practice). */
+interface Played { before: Ball[]; shot: Shot; turns: THREE.Quaternion[]; events: SimEvent[]; h: Highlight | null }
 /** The last shot, to watch again. A new game forgets it. */
 let lastPlayed: Played | null = null;
 /**
@@ -116,6 +118,7 @@ const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2,
 /** The computer's turn, step by step: think, place the cue ball, turn the cue onto the shot, pull back, play. */
 function runCpu(dt: number) {
   if (state !== "aim" || !cpuTurn()) { cpu = null; return; }
+  if (!cpu && laterTimer) return; // a highlight's replay is coming: watch it first
   if (!cpu) {
     cpu = { phase: "think", t: 0, d: null, fromAim: 0, toAim: 0, fromX: 0, fromY: 0 };
     askId++;
@@ -332,6 +335,8 @@ function onNet(m: FromRelay) {
 
 /** Every frame of a friend match: play the friend's shots, follow their cue, send ours. */
 function online(dt: number) {
+  // The friend skipped the replay and played: their shot comes first.
+  if (state === "replay" && remoteShots.length) endReplay();
   if (state === "aim" && remoteShots.length) {
     remoteShots.sort((a, b) => a.n - b.n);
     playRemote(remoteShots.shift()!);
@@ -521,7 +526,7 @@ function respawnCue() {
 
 function endOfShot() {
   const events = sim!.events;
-  if (struck) lastPlayed = { ...struck, events };
+  if (struck) lastPlayed = { ...struck, events, h: null };
   balls = sim!.balls;
   sim = null;
   tip = { side: 0, height: 0 };
@@ -537,6 +542,9 @@ function endOfShot() {
 
   const shooter = game.turn;
   const v = judge(game, shotBefore, balls, events, onEight(game, shotBefore) ? called : null);
+  // A highlight is replayed by itself (both browsers of a friend match pick the same shots).
+  const h = lastPlayed ? highlight(game, lastPlayed.before, lastPlayed.shot, v) : null;
+  if (lastPlayed) lastPlayed.h = h;
   if (mode === "cpu") v.message = v.message.replace("for you", shooter === 0 ? "for you" : "for the computer");
   if (mode === "online") v.message = v.message.replace("for you", shooter === seat ? "for you" : `for ${names[shooter]}`);
   game = advanceGame(game, balls, events, v);
@@ -565,8 +573,11 @@ function endOfShot() {
   const turnMsg = mode === "cpu" || mode === "online"
     ? (game.turn === me ? (shooter === me ? "Shoot again" : "Your turn") : (shooter === me ? `${mode === "cpu" ? "Computer" : other}'s turn` : `${mode === "cpu" ? "Computer" : other} again`))
     : game.turn === shooter ? `${names[shooter]} again` : `${names[game.turn]} to play`;
-  toast(v.message ? `${v.message} ${turnMsg}.` : `${turnMsg}.`);
+  const msg = v.message ? `${v.message} ${turnMsg}.` : `${turnMsg}.`;
   updateScore();
+  // A nice shot plays again from low a moment after the balls stop; whose turn it is comes after it.
+  if (h && h.score >= HIGHLIGHT) later(() => { startReplay(true, true); toast(msg); }, 600);
+  else toast(msg);
 }
 
 function free(x: number, y: number) {
@@ -1096,7 +1107,7 @@ function toast(msg: string) {
 
 const REPLAY_SLOW = 0.35;
 const replayBtn = $<HTMLButtonElement>("#b-replay");
-const replayBadge = $("#replay-badge"), replaySpeed = $("#replay-badge .speed"), replayVeil = $("#replay-veil");
+const replayBadge = $("#replay-badge"), replayWhy = $("#replay-badge .why"), replaySpeed = $("#replay-badge .speed"), replayVeil = $("#replay-veil");
 /** How slow the replay is now, 1 at its slowest, 0 at normal speed: the badge, the darkened edges, the pitch. */
 function showSlowness(rate: number) {
   const k = Math.max(0, Math.min(1, (1 - rate) / (1 - REPLAY_SLOW)));
@@ -1121,9 +1132,10 @@ function slowPart(events: readonly SimEvent[]) {
   return Math.min(3, pot >= 0 ? pot + 0.6 : contact >= 0 ? contact + 0.8 : 0.8);
 }
 
-/** `low`: with camera angles (src/render/cinema.ts); otherwise from the top. */
-function startReplay(low = false) {
-  if (!canReplay()) return;
+/** `low`: with camera angles (src/render/cinema.ts); otherwise from the top. `auto`: a highlight the game plays
+ * by itself, whoever is to shoot next. */
+function startReplay(low = false, auto = false) {
+  if (auto ? !lastPlayed || (state !== "aim" && state !== "over") : !canReplay()) return;
   const p = lastPlayed!;
   sound.unlock();
   const cine = low
@@ -1148,6 +1160,8 @@ function startReplay(low = false) {
   $("#over").hidden = true;
   $("#toast").classList.remove("show");
   showSlowness(REPLAY_SLOW);
+  replayWhy.textContent = p.h?.label ?? "";
+  replayWhy.hidden = !replayWhy.textContent;
   replayBadge.hidden = false;
   replayBtn.classList.add("on");
 }
@@ -1377,6 +1391,10 @@ if (new URLSearchParams(location.search).has("test")) {
     timeScale: (k: number) => { timeScale = k; },
     replay: (low = false) => startReplay(low),
     replayPhase: () => replaying?.phase ?? null,
+    /** What made the last shot special (src/sim/highlight.ts), or null. */
+    highlight: () => lastPlayed?.h ?? null,
+    /** Play this exact shot (direction, speed, tip), as the shooter would. */
+    play: (shot: Shot) => shootExact(shot),
     /** The low replay's plan: when each camera comes, the slow stretches, the rise. */
     cine: () => replaying?.cine ? { beats: replaying.cine.beats.map((b) => b.from), slow: replaying.cine.slow, riseAt: replaying.cine.riseAt } : null,
     /** The camera is away from the top view (the director has it). */

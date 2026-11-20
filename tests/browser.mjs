@@ -247,6 +247,35 @@ await scenario("the winning replay: a click skips it, straight to the card in th
   check(Math.abs(c.x - 640) < 2 && Math.abs(c.y - 400) < 40, "the table where it was", JSON.stringify(c));
 });
 
+await scenario("a highlight replays by itself, saying why; not in practice", async (open) => {
+  const p = await open();
+  // A bank shot (tests/highlight.test.ts): the 1 off the far rail into a pocket; the 9 keeps the game going.
+  const bank = { dx: 0.8553642601605067, dy: 0.5180270093731302, speed: 2.5, side: 0, height: 0 };
+  const layout = [[0, -0.5, -0.1], [1, 0, 0.25], [9, -0.9, 0.4]];
+  await p.click("[data-mode=pass]");
+  await pool(p, ([layout, bank]) => {
+    window.__pool.place(layout);
+    window.__pool.setGame({ groups: ["solids", "stripes"], breakShot: false, ballInHand: "none", turn: 0 });
+    window.__pool.play(bank);
+  }, [layout, bank]);
+  await played(p);
+  check((await pool(p, () => window.__pool.highlight()?.label)) === "Bank shot", "the bank is seen", JSON.stringify(await pool(p, () => window.__pool.highlight())));
+  await waitState(p, "replay", 3000);
+  check(await pool(p, () => window.__pool.camAway()), "it plays from low");
+  check((await p.textContent("#replay-badge .why")) === "Bank shot" && (await p.isVisible("#replay-badge .why")), "the badge says why");
+  await p.waitForTimeout(800);
+  await p.mouse.click(640, 400);
+  check((await pool(p, () => window.__pool.state())) === "aim", "a click skips it");
+  check((await p.textContent("#toast")).includes("Player 1 again"), "whose turn, after it", await p.textContent("#toast"));
+  // The same shot in practice: no replay by itself.
+  await p.click("#b-menu");
+  await p.click("[data-mode=practice]");
+  await pool(p, ([layout, bank]) => { window.__pool.place(layout); window.__pool.play(bank); }, [layout, bank]);
+  await played(p);
+  await p.waitForTimeout(1500);
+  check((await pool(p, () => window.__pool.state())) === "aim", "practice replays only on request");
+});
+
 await scenario("replay with camera angles from the Replay menu, from the bottom side; a click skips it", async (open) => {
   const p = await open();
   await p.click("[data-mode=practice]");

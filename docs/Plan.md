@@ -13,8 +13,8 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 **Pick up here (21 November, later):** step 2b, **highlight replays**, comes before the cinematic break (the
 user, 21 November): replays play by themselves for the winning shot and for nice shots, in every mode but
 practice (manual there); in friend matches the player in turn may play a replay on both screens. The
-detector is done (`src/sim/highlight.ts`); next: play highlights automatically, with the reason on the
-badge, then the shared replay in friend matches.
+detector and the automatic replays are done; ask how they feel (how often, the pause, the badge). Next: the
+shared replay in friend matches (the player in turn plays it on both screens).
 
 **Earlier (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
 not pushed: the camera director, lamps, and the winning shot replayed from low. The user saw the first version
@@ -786,8 +786,20 @@ to make clips for spreading the word). Four steps:
       them; people will. Tune after playing.
     - Tests: `tests/highlight.test.ts` (each kind from a real layout, the short straight pot that is not
       one, fouls, the opponent's ball, the break); `npm run engines` compares the highlights too.
-  - [ ] Automatic: camera angles, skippable, never blocking a shot (the computer waits for it). Against the
-    computer, friend matches and two players on one screen; **practice stays manual** (the user).
+  - [x] Automatic: camera angles, skippable, never blocking a shot (the computer waits for it). Against the
+    computer, friend matches and two players on one screen; **practice stays manual** (the user). (21 November)
+    - `endOfShot` works out the highlight before the game moves on (kept on `lastPlayed.h`); from
+      `HIGHLIGHT` up, `startReplay(true, true)` 0.6 s after the balls stop, whoever is to shoot next. The
+      turn message ("Player 1 again.") waits for the replay's end. The computer doesn't start thinking while
+      a replay is coming (`laterTimer`) or playing. Online, a friend's shot arriving during a replay ends it
+      (they skipped theirs and played). The badge says why, in bold after "Replay"; any replay of that shot
+      does (the menu's too). On a phone (520 px and narrower) the reason takes the place of "tap to skip"
+      (the longest, "Combination · 2 balls", made the badge 410 px wide on a 360 px screen).
+    - `?test`: `__pool.highlight()` (the last shot's), `__pool.play(shot)` (an exact shot). Browser test: a
+      bank shot in a two-player game replays by itself from low with "Bank shot", a click skips it, then
+      whose turn; the same shot in practice doesn't. Not yet tested: both screens of a friend match
+      replaying the same highlight (comes with the shared replay).
+    - To judge: how often it comes, whether 0.6 s is the right pause, the reasons on the badge.
   - [ ] Friend matches: the player in turn may start a replay (the menu) on both screens: a `replay` message
     with the shot's number and top-down or camera angles, passed on by the relay and not kept. The watcher
     may skip on their own screen; the player in turn skipping ends it for both. The menu stays until we
