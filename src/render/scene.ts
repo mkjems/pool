@@ -23,7 +23,19 @@ export interface View {
   quality: number;
   /** On small screens: how far the controls reach in from each edge (CSS px); the table fits the rest. */
   insets: Insets | null;
+  /** The fitted top view, worked out by resize: where the camera rests. */
+  home: Pose;
+  /** The camera is the director's (src/render/director.ts): resize leaves it where it is. */
+  free: boolean;
+  /** Put the camera at a pose (table coordinates). */
+  place(p: Pose): void;
 }
+
+/**
+ * A camera placement in table coordinates (x along, y across, z up): where it is, what it looks at, which way is
+ * up on the screen, the vertical field of view, and how far the picture is shifted (CSS px, phones).
+ */
+export interface Pose { eye: THREE.Vector3; look: THREE.Vector3; up: THREE.Vector3; fov: number; shiftX: number; shiftY: number }
 
 export interface Insets { top: number; right: number; bottom: number; left: number }
 
@@ -81,9 +93,11 @@ export function makeView(canvas: HTMLCanvasElement): View {
   scene.add(sun);
   scene.add(new THREE.HemisphereLight(0x8a8f99, 0x1a120c, 0.12));
 
-  const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 30);
+  const camera = new THREE.PerspectiveCamera(24, 1, 0.05, 30);
+  const TOP_FOV = 24;
   const view: View = {
-    renderer, scene, camera, portrait: false, env, quality: 1, insets: null,
+    renderer, scene, camera, portrait: false, env, quality: 1, insets: null, free: false,
+    home: { eye: new THREE.Vector3(), look: new THREE.Vector3(), up: new THREE.Vector3(), fov: TOP_FOV, shiftX: 0, shiftY: 0 },
     resize() {
       const w = window.innerWidth, h = window.innerHeight;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * view.quality);
@@ -93,7 +107,7 @@ export function makeView(canvas: HTMLCanvasElement): View {
       const small = Math.min(w, h) < 560;
       const aspect = w / h;
       camera.aspect = aspect;
-      const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const tan = Math.tan(THREE.MathUtils.degToRad(TOP_FOV / 2));
       // The table's half-extents on screen (x across the screen, y up it), with the rails and some air: on big
       // screens a lot (room to move the mouse behind any ball), on phones a little.
       const m = small ? CUSHION_W + RAIL_W + 0.012 : CUSHION_W + RAIL_W + 0.11;
@@ -117,12 +131,25 @@ export function makeView(canvas: HTMLCanvasElement): View {
       }
       // Visible half-extents at distance D: (D tan aspect, D tan); the table's extents must fit the usable part.
       const D = Math.max((ey * h) / sh / tan, (ex * w) / sw / (tan * aspect));
-      if (cx !== w / 2 || cy !== h / 2) camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
+      const home = view.home;
+      home.eye.set(0, 0, D + R);
+      home.look.set(0, 0, 0);
+      home.up.set(portrait ? 1 : 0, portrait ? 0 : 1, 0);
+      home.shiftX = w / 2 - cx;
+      home.shiftY = h / 2 - cy;
+      if (!view.free) view.place(home);
+      else camera.updateProjectionMatrix();
+    },
+    place(p) {
+      const w = window.innerWidth, h = window.innerHeight;
+      if (Math.abs(p.shiftX) > 0.01 || Math.abs(p.shiftY) > 0.01) camera.setViewOffset(w, h, p.shiftX, p.shiftY, w, h);
       else camera.clearViewOffset();
-      camera.position.set(0, D + R, 0);
-      camera.up.set(portrait ? 1 : 0, 0, portrait ? 0 : -1);
-      camera.lookAt(0, 0, 0);
+      camera.fov = p.fov;
+      toWorld(p.eye.x, p.eye.y, p.eye.z, camera.position);
+      toWorld(p.up.x, p.up.y, p.up.z, camera.up);
+      camera.lookAt(toWorld(p.look.x, p.look.y, p.look.z));
       camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(); // toScreen and toTable may be asked before the next render
     },
     toTable(px, py) {
       const ndc = new THREE.Vector2((px / window.innerWidth) * 2 - 1, -(py / window.innerHeight) * 2 + 1);

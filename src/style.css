@@ -605,6 +605,27 @@ button:focus-visible {
 .replay-badge[hidden] {
   display: none;
 }
+/* A replay seen from low (the winning shot): the controls and score step aside, the badge goes up into the dark
+   of the room. */
+.bar,
+.score,
+.power,
+.spin,
+.labels {
+  transition: opacity 0.4s;
+}
+.cinema .bar,
+.cinema .score,
+.cinema .power,
+.cinema .spin,
+.cinema .labels,
+.cinema .toast {
+  opacity: 0;
+  pointer-events: none;
+}
+.cinema .replay-badge {
+  top: max(4%, env(safe-area-inset-top));
+}
 /* A text link, for going back. */
 .menu .card button.link {
   margin-top: 4px;

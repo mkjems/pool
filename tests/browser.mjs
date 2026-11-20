@@ -206,9 +206,15 @@ await scenario("calling the 8 by tapping a pocket; potting it wins; Rematch", as
   check((await pool(p, () => window.__pool.game().called)) === 3, "the tapped pocket is called");
   await pool(p, () => window.__pool.shoot(0.35));
   await played(p);
-  await p.waitForSelector("#over:not([hidden])", { timeout: 5000 });
+  // The winning shot plays again by itself, from low, with the controls out of the way; then the card.
+  await waitState(p, "replay", 5000);
+  check(await pool(p, () => window.__pool.camAway()) && (await p.isHidden("#over")), "the winning shot is replayed from low");
+  check(await p.evaluate(() => document.body.classList.contains("cinema") && getComputedStyle(document.querySelector(".bar")).pointerEvents === "none"), "the controls step aside");
+  await p.waitForSelector("#over:not([hidden])", { timeout: 25000 });
+  check(!(await pool(p, () => window.__pool.camAway())) && !(await p.evaluate(() => document.body.classList.contains("cinema"))), "it ends in the top view");
   check((await p.textContent("#over-title")) === "Player 1 wins", "the 8 in the called pocket wins", await p.textContent("#over-title"));
   await p.click("#b-over-replay");
+  check(!(await pool(p, () => window.__pool.camAway())), "watched again on request: from the top");
   check((await pool(p, () => window.__pool.state())) === "replay" && (await p.isHidden("#over")), "the winning shot can be watched again");
   await p.waitForSelector("#over:not([hidden])", { timeout: 20000 });
   check((await pool(p, () => window.__pool.state())) === "over", "then the card comes back");
@@ -216,6 +222,27 @@ await scenario("calling the 8 by tapping a pocket; potting it wins; Rematch", as
   const g = await pool(p, () => window.__pool.game());
   check(g.breakShot && g.winner === null && (await p.isHidden("#over")), "Rematch starts a new game");
   check(g.turn === 1, "the other player breaks the rematch");
+});
+
+await scenario("the winning replay: a click skips it, straight to the card in the top view", async (open) => {
+  const p = await open();
+  await p.click("[data-mode=pass]");
+  const P = { mx: 0.9905 - 0.0414, my: 0.49525 - 0.0414 }, u = Math.SQRT1_2;
+  await pool(p, ([P, u]) => {
+    window.__pool.place([[0, P.mx - u * 0.6, P.my - u * 0.6], [8, P.mx - u * 0.25, P.my - u * 0.25], [9, -0.6, -0.3]]);
+    window.__pool.setGame({ groups: ["solids", "stripes"], breakShot: false, ballInHand: "none", turn: 0 });
+  }, [P, u]);
+  const pocket = await screen(p, 0.9905, 0.49525);
+  await p.mouse.click(pocket.x, pocket.y);
+  await pool(p, ([P, u]) => { window.__pool.aimAt(P.mx - u * 0.25, P.my - u * 0.25); window.__pool.shoot(0.35); }, [P, u]);
+  await played(p);
+  await waitState(p, "replay", 5000);
+  await p.waitForTimeout(1500);
+  await p.mouse.click(640, 400);
+  check((await pool(p, () => window.__pool.state())) === "over" && !(await p.isHidden("#over")), "the card at once");
+  check(!(await pool(p, () => window.__pool.camAway())), "the camera is home");
+  const c = await screen(p, 0, 0);
+  check(Math.abs(c.x - 640) < 2 && Math.abs(c.y - 400) < 40, "the table where it was", JSON.stringify(c));
 });
 
 await scenario("a foul gives the other player ball in hand", async (open) => {

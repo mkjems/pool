@@ -10,11 +10,13 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 ## Next session
 
-**Pick up here (20 November, evening):** the user wants the camera work next, step 2 of **Replays and the
-cinematic break** under phase 9: a camera director and a low camera, starting with the winning shot replayed
-automatically. Replay of the last shot (step 1) is done and committed, not pushed; ask the user how it feels
-(the button found? the slow motion?). One intermittent failure in `npm run browser` (1 run in 6, scenario
-unknown); note which one if it shows up again.
+**Pick up here (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
+not pushed: the camera director, lamps, and the winning shot replayed from low. Ask the user how it looks
+(win a game, or with `?test` pot any ball and run `__pool.replay(true)` in the console). Next: step 3, the
+cinematic break. Waiting (the user, 21 November): maybe a stronger look for slow motion, such as a colour
+filter; not yet. The intermittent `npm run browser` failure is "friend match: join by code ...": Chrome's
+autoplay warning ("The AudioContext was not allowed to start") counts as a page error; it seems to come when a
+shot's sound reaches a page nobody has clicked (after the reload). Passes on rerun.
 
 Handoff written 17 November 2026, end of the first working session. Start here.
 
@@ -687,9 +689,30 @@ to make clips for spreading the word). Four steps:
     in pitch with it (`sound.pitch`); the Replay button glows twice when it is offered after a shot. Toasts
     that come during a replay wait for its end (the badge stands where they appear).
   - To judge: whether the button is found now, the slow-motion speed, the darkened edges.
-- [ ] 2. A camera director and a low camera: the winning shot replayed automatically, from low, ending on the
+- [x] 2. A camera director and a low camera: the winning shot replayed automatically, from low, ending on the
   pocket. Always ends on the fitted top view. Needs visible lamp shades above the table and a look at the cloth
-  and shadows at grazing angles. HUD, labels and markers hidden while it plays.
+  and shadows at grazing angles. HUD, labels and markers hidden while it plays. (21 November)
+  - `src/render/director.ts`: `cut`, `glide`, `home` between poses (eye, look, up, fov, picture shift; table
+    coordinates). The top view is `view.home`, worked out by `resize`; while `view.free` the director has the
+    camera. Up turns smoothly from the cloth's up to the top view's, so the rise turns the table into place.
+    On narrow screens a low shot's field of view opens up (`fit`), or a phone held upright sees a sliver.
+  - The winning shot (the 8 down, the shooter wins, any mode): 0.7 s after the last ball stops, the card is set
+    up behind it and `startReplay(true)` plays. `planCine` in `src/main.ts`: behind the cue ball, a little
+    aside and above the cue (higher with a raised cue), easing closer; cut to beyond the 8's pocket, low over
+    the rail, looking back along its last roll (from the pocket event's velocity), at the hit but at least
+    0.45 s before the drop and not in the first 0.25 s, so a ball near the pocket is seen being struck; up
+    into the top view (2.6 s) 0.35 s after the drop while the rest roll out; then the card. Pace by simulated
+    time (`cineRate`): slow for the stroke and first contact and from 0.7 s before the drop; normal speed
+    between them when the 8 has far to roll. About 9 s in all. A click skips it, camera straight home.
+    `body.cinema` fades out the bar, score, power, spin and labels; the badge moves to the top (the dark room).
+  - Lamps (`src/render/lamps.ts`): three dark green shades on a bar, bright diffusers, rods up into the dark,
+    fading out as the camera rises from 0.55 to 0.85 m (from the top view they would stand in front of the cloth).
+  - Low angles: cushion faces were black (one light from straight above); the lamps now light faces that
+    stand up (`sideLight` in the cloth shader, `side` on the cushions only). The table has an apron (a thin
+    frame, 8 mm, flush under the rail: the side pockets' holes reach 0.615 m out and must not show it) and legs.
+  - 60 fps at 2560 × 1300 × 2 from low cameras. `place` updates the camera's matrices at once (toScreen right
+    after a cut used the old camera). Browser tests: the winning replay plays from low and ends in the top
+    view; a click skips it to the card.
 - [ ] 3. Cinematic break: low behind the cue ball, slow motion as the rack opens, rising into the top view.
   First break of a session; an option to turn it off.
 - [ ] 4. Clips for posting: a `?test` hook and a script that renders a replay frame by frame at an exact

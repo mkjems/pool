@@ -11,6 +11,8 @@ export const RIM_TOP = WOOD_H + 0.001;
 /** Width of that lip where it shows, between the hole and the wood. */
 const RIM_W = 0.012;
 const HL = TABLE_L / 2, HW = TABLE_W / 2;
+/** The floor, below the cloth. */
+const FLOOR_Z = -0.78;
 
 export const CLOTHS = {
   green: "#1b6b45",
@@ -87,8 +89,10 @@ function woodTexture() {
 /**
  * Adds the lamp shadows of every ball to a standard material, computed exactly per pixel, and the lamps' pools of
  * light. `direct` scales the overhead light's mirror reflection (seen straight from above it washes out metal).
+ * `side`: how much the lamps light faces that stand up (the cushions' faces, seen from a low camera; the one
+ * light from straight above leaves them black). Faces looking up are lit by the pools already.
  */
-function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1, shadows = true, direct = 1) {
+function withBallShadows(m: THREE.MeshStandardMaterial, balls: THREE.Vector4[], strength = 1, shadows = true, direct = 1, side = 0) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uBalls = { value: balls };
     sh.uniforms.uLamps = { value: LAMPS };
@@ -138,12 +142,26 @@ float ballShadow(vec3 p) {
     }
   }
   return sh;
+}
+// The three lamps on a face that stands up (normal n in table coordinates): Lambert with distance falloff.
+float sideLight(vec3 p, vec3 n) {
+  float s = 0.0;
+  for (int k = 0; k < 3; k++) {
+    vec3 L = uLamps[k] - p;
+    float d2 = dot(L, L);
+    s += max(0.0, dot(n, L)) * inversesqrt(d2) / (0.5 + d2);
+  }
+  return s * (1.0 - max(n.z, 0.0));
 }`,
       )
       .replace("#include <aomap_fragment>", `reflectedLight.directSpecular *= ${direct.toFixed(3)};\n#include <aomap_fragment>`)
-      .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= ${shadows ? "ballShadow(vTablePos) * " : ""}lampPool(vTablePos);`);
+      .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= ${shadows ? "ballShadow(vTablePos) * " : ""}lampPool(vTablePos);${side > 0 ? `
+{
+  vec3 nW = inverseTransformDirection(normal, viewMatrix);
+  gl_FragColor.rgb += diffuseColor.rgb * ${side.toFixed(3)} * sideLight(vTablePos, vec3(nW.x, -nW.z, nW.y));
+}` : ""}`);
   };
-  m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}-${direct}`;
+  m.customProgramCacheKey = () => `pool-shadowed-${strength}-${shadows}-${direct}-${side}`;
 }
 
 /** A pocket's opening in the physics, seen from above: a capsule across the mouth (src/sim/table.ts). */
@@ -334,7 +352,7 @@ export function makeTable(): TableView {
 
   // Cushions: cloth-covered rubber, a little lighter where the lamp catches the nose.
   const cushionMat = new THREE.MeshStandardMaterial({ color: CLOTHS.green, roughness: 0.85, map: clothTex });
-  withBallShadows(cushionMat, shadowBalls, 0.8);
+  withBallShadows(cushionMat, shadowBalls, 0.8, true, 1, 0.9);
   for (const seg of TABLE.segments) {
     if (seg.kind !== "rail") continue;
     const geo = new THREE.ExtrudeGeometry(cushionShape(seg), {
@@ -432,15 +450,27 @@ export function makeTable(): TableView {
     new THREE.PlaneGeometry(14, 14),
     new THREE.MeshStandardMaterial({ color: 0x0d0a08, roughness: 0.85, map: woodTex }),
   );
-  floor.position.z = -0.78;
+  floor.position.z = FLOOR_Z;
   group.add(floor);
-  // A body under the rails so the table isn't hollow at the edges.
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry((HL + CUSHION_W + RAIL_W) * 2 - 0.02, (HW + CUSHION_W + RAIL_W) * 2 - 0.02, 0.2),
-    new THREE.MeshStandardMaterial({ color: 0x1b0f08, roughness: 0.7 }),
-  );
-  body.position.z = -0.27;
-  group.add(body);
+  // The body under the rails: an apron of the same wood, a little in from the rails' edge, and four legs.
+  const apronMat = new THREE.MeshStandardMaterial({ map: woodTex, color: 0x9a8a80, roughness: 0.55 });
+  apronMat.userData.env = 0.02;
+  const AX = HL + CUSHION_W + RAIL_W - 0.005, AY = HW + CUSHION_W + RAIL_W - 0.005, APRON = 0.2;
+  // A frame, open in the middle where the pocket cups hang; its top just under the cloth. Thin: the side
+  // pockets' holes reach to 0.615 m from the middle, and the frame must not show in them.
+  const T = 0.008;
+  for (const [w, d, x, y] of [[AX * 2, T, 0, AY - T / 2], [AX * 2, T, 0, -AY + T / 2], [T, AY * 2, AX - T / 2, 0], [T, AY * 2, -AX + T / 2, 0]]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(w, d, APRON), apronMat);
+    side.position.set(x, y, -0.006 - APRON / 2);
+    group.add(side);
+  }
+  const legH = -FLOOR_Z - APRON - 0.006;
+  const legGeo = new THREE.BoxGeometry(0.11, 0.11, legH);
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    const leg = new THREE.Mesh(legGeo, apronMat);
+    leg.position.set(sx * (AX - 0.12), sy * (AY - 0.1), FLOOR_Z + legH / 2);
+    group.add(leg);
+  }
 
   return {
     group,
