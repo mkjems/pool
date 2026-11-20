@@ -3,12 +3,18 @@
 // comes to look down steeply.
 
 import * as THREE from "three";
-import { LAMPS } from "./table";
+import { CUSHION_W, LAMPS, RAIL_W } from "./table";
+import { TABLE_L, TABLE_W } from "../sim/constants";
+
+const EDGE_X = TABLE_L / 2 + CUSHION_W + RAIL_W, EDGE_Y = TABLE_W / 2 + CUSHION_W + RAIL_W;
+const OUT = 0.05, FADE = 0.35;
 
 /** Lamp shades, in the table group (table coordinates). */
 export class LampView {
   readonly group = new THREE.Group();
   private mats: THREE.Material[] = [];
+  /** Points on the shades and the bar, to tell whether they lie over the table as the camera sees them. */
+  private marks: THREE.Vector3[] = [];
 
   constructor(parent: THREE.Object3D) {
     // A shade: a shallow four-sided hood, open below, lacquered dark green outside and white inside.
@@ -69,6 +75,8 @@ export class LampView {
       this.group.add(rod);
     }
     function z0Of(l: THREE.Vector3) { return l.z + 0.02; }
+    for (const l of LAMPS) for (const sx of [-1, 1]) for (const sy of [-1, 1]) this.marks.push(new THREE.Vector3(l.x + sx * lowW / 2, l.y + sy * lowD / 2, l.z + 0.02));
+    this.marks.push(new THREE.Vector3(x0 - 0.25, 0, zb), new THREE.Vector3(x1 + 0.25, 0, zb));
 
     for (const m of this.mats) { m.transparent = true; m.opacity = 1; }
     this.group.visible = false;
@@ -76,12 +84,19 @@ export class LampView {
   }
 
   /**
-   * Shown while the camera looks at the table from the side; fading out as it looks down more steeply than
-   * `low` degrees (from the middle of the table), gone past `high`: from above they would hide the cloth.
+   * Shown unless, seen from the camera (`eye`, table coordinates), a lamp lies over the table: then they would
+   * hide the cloth (from the top view, or a camera above them). Each shade's corners and the bar's ends are
+   * followed from the eye down to the cloth; the nearer any lands inside the table (`OUT` beyond the wood's
+   * edge counts as inside, fading over `FADE`), the fainter they are.
    */
-  update(eye: THREE.Vector3, low = 38, high = 50) {
-    const steep = THREE.MathUtils.radToDeg(Math.atan2(eye.z, Math.hypot(eye.x, eye.y)));
-    const k = Math.max(0, Math.min(1, (high - steep) / (high - low)));
+  update(eye: THREE.Vector3) {
+    let clear = Infinity;
+    for (const p of this.marks) {
+      if (eye.z <= p.z + 0.02) continue; // looking up at it: it is against the dark ceiling
+      const t = eye.z / (eye.z - p.z), x = eye.x + (p.x - eye.x) * t, y = eye.y + (p.y - eye.y) * t;
+      clear = Math.min(clear, Math.max(Math.abs(x) - EDGE_X, Math.abs(y) - EDGE_Y));
+    }
+    const k = Math.max(0, Math.min(1, (clear - OUT) / FADE));
     this.group.visible = k > 0;
     for (const m of this.mats) {
       m.opacity = k;

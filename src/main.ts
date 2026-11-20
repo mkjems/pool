@@ -11,7 +11,7 @@ import { HEAD_X, TABLE } from "./sim/table";
 import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
 import { Director, pose } from "./render/director";
-import { planCine, cineRate, type Cine } from "./render/cinema";
+import { planCine, cineRate, TABLE_CORNERS, type Cine } from "./render/cinema";
 import { LampView } from "./render/lamps";
 import { makeTable, CLOTHS, type Cloth } from "./render/table";
 import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls";
@@ -1187,7 +1187,7 @@ function runReplay(dt: number) {
         director.glide(b.push, 3);
       }
       // The last ball is down: up into the top view while the others roll out at normal speed.
-      if (!c.rising && t > c.riseAt) { c.rising = true; director.home(2.6); }
+      if (!c.rising && t > c.riseAt) { c.rising = true; director.rise(3, TABLE_CORNERS); }
     } else if (t > r.slowUntil && r.rate < 1) {
       // Past the part that matters: back to normal speed over half a second, for the balls rolling out.
       r.rate = Math.min(1, r.rate + dt * 1.3);
@@ -1385,6 +1385,15 @@ if (new URLSearchParams(location.search).has("test")) {
         return q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight;
       }).map((b) => b.id);
     },
+    /** During the rise into the top view, once the table has been opened out to: its corners off the screen. */
+    cornersOut: () => {
+      const k = director.rising;
+      if (k === null || k < 0.2) return [];
+      return TABLE_CORNERS.map((c, i) => [i, view.toScreen(c.x, c.y, c.z)] as const)
+        .filter(([, q]) => q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight).map(([i]) => i);
+    },
+    /** How far along the rise into the top view (0 to 1), or null. */
+    riseT: () => director.rising,
     /** Where the camera is (table coordinates). */
     camera: () => ({ x: director.eye.x, y: director.eye.y, z: director.eye.z }),
     /** Put the camera somewhere (table coordinates), or back home with no arguments. */

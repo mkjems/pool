@@ -721,6 +721,14 @@ to make clips for spreading the word). Four steps:
     on, from its cut to the next cut or the rise; on a break that is the whole spread of the rack.
     `__pool.outOfShot()` lists moving balls off the screen while a camera is on; a browser test steps two
     breaks frame by frame and expects none (the previous director lost the 3, 6 and cue ball on one).
+    **The rise keeps the whole table in view** (the user): `director.rise` first turns and opens out, from
+    where the last camera stands, to all four outer corners of the wood (`TABLE_CORNERS`), in the first
+    fifth; then climbs turned on the table, the lens just wide enough for it at every moment (`fovFor`),
+    turning into the top view's direction in the last third and taking the top view's own lens only at the
+    very end (it is narrower; handing over earlier let a corner slip off a phone's edge). `__pool.cornersOut()`
+    lists corners off the screen during the rise; the browser test checks it on both breaks.
+    Lamps: shown unless, seen from the camera, a shade or the bar lies over the table (followed from the eye
+    down to the cloth); they hid the cloth on a phone's rise.
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
     the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
     distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
@@ -733,8 +741,7 @@ to make clips for spreading the word). Four steps:
     collision that sent it (just after the first contact if that was it; at least 0.45 s before the drop),
     holding that collision, the ball, the cue ball, the pocket and part of the table, at least 1.6 m away,
     28° to 36°, 28° down. Beats under 0.7 s apart merge (the 8 wins).
-    Each camera drifts in very slightly while it is on. Lamps fade as the camera comes to look down at
-    the table steeper than 38° (gone at 50°), so they show in the replay and never block the top view. Up into the top view (2.6 s) 0.35 s after the last
+    Each camera drifts in very slightly while it is on. Up into the top view (2.6 s) 0.35 s after the last
     drop; then the card. Slow motion (`cineRate`, by simulated time) for the stroke and first contact and
     round each beat; normal speed between. `__pool.replay(true)` replays any shot with a pot this way;
     `__pool.cine()` shows the plan. A click skips it, camera straight home. `body.cinema` fades out the bar,

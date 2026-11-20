@@ -264,7 +264,7 @@ await scenario("replay with camera angles from the Replay menu, from the bottom 
   check((await pool(p, () => window.__pool.state())) === "aim" && !(await pool(p, () => window.__pool.camAway())), "skipped: back in the top view");
 });
 
-await scenario("camera angles never leave a moving ball out of the shot (two breaks, frame by frame)", async (open) => {
+await scenario("camera angles never leave a moving ball out of the shot, nor the table in the rise (two breaks)", async (open) => {
   const p = await open();
   await p.click("[data-mode=practice]");
   for (const seed of [2, 4]) { // both lost balls out of the shot before the rule
@@ -276,8 +276,9 @@ await scenario("camera angles never leave a moving ball out of the shot (two bre
       await pool(p, () => window.__pool.step(1 / 30));
       await p.waitForTimeout(25);
       for (const id of await pool(p, () => window.__pool.outOfShot())) out.add(id);
+      for (const c of await pool(p, () => window.__pool.cornersOut())) out.add(`corner ${c}`);
     }
-    check(out.size === 0, `break ${seed}: every moving ball in the shot`, `out: ${[...out]}`);
+    check(out.size === 0, `break ${seed}: every moving ball in the shot, the whole table in the rise`, `out: ${[...out]}`);
   }
 });
 

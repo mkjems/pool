@@ -35,6 +35,8 @@ type Hit = Extract<SimEvent, { type: "ball" }>;
 
 const HX = TABLE_L / 2 + CUSHION_W, HY = TABLE_W / 2 + CUSHION_W; // the backs of the cushions
 const OX = HX + RAIL_W, OY = HY + RAIL_W; // the outer edges of the wooden rails
+/** The table's four outer corners, on top of the wood: what the rise into the top view keeps in the picture. */
+export const TABLE_CORNERS = [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sy]) => new THREE.Vector3(sx * OX, sy * OY, WOOD_H));
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 /** From (x, y), going along the unit (wx, wy): how far to the backs of the cushions (or to the box ex, ey). */

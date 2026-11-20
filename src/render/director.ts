@@ -11,6 +11,20 @@ export function pose(eye: THREE.Vector3, look: THREE.Vector3, fov = 40): Pose {
   return { eye: eye.clone(), look: look.clone(), up: new THREE.Vector3(0, 0, 1), fov, shiftX: 0, shiftY: 0 };
 }
 
+/**
+ * The vertical field of view (degrees) a camera at `eye` looking along `dir` (unit) needs to hold every point,
+ * with `up` as the screen's up (any vector not along `dir`), on a screen `aspect` wide; a little room round them.
+ */
+export function fovFor(eye: THREE.Vector3, dir: THREE.Vector3, up: THREE.Vector3, points: THREE.Vector3[], aspect: number) {
+  const right = dir.clone().cross(up).normalize(), u = right.clone().cross(dir);
+  let need = 0;
+  for (const p of points) {
+    const v = p.clone().sub(eye), ahead = Math.max(0.05, v.dot(dir));
+    need = Math.max(need, Math.abs(v.dot(u)) / ahead, Math.abs(v.dot(right)) / ahead / aspect);
+  }
+  return THREE.MathUtils.radToDeg(2 * Math.atan(need * 1.08 + 0.01));
+}
+
 function copyPose(p: Pose): Pose {
   return { eye: p.eye.clone(), look: p.look.clone(), up: p.up.clone(), fov: p.fov, shiftX: p.shiftX, shiftY: p.shiftY };
 }
@@ -18,8 +32,11 @@ function copyPose(p: Pose): Pose {
 export class Director {
   /** The pose shown now. */
   private now: Pose;
-  /** A move in progress: from, to (null: home, which may change size as the window does), time, length. */
-  private move: { from: Pose; to: Pose | null; t: number; len: number; arc: number } | null = null;
+  /**
+   * A move in progress: from, to (null: home, which may change size as the window does), time, length. `table`:
+   * a rise home that keeps these points (the table's corners) in the picture all the way.
+   */
+  private move: { from: Pose; to: Pose | null; t: number; len: number; arc: number; table?: THREE.Vector3[] } | null = null;
 
   constructor(private view: View) {
     this.now = copyPose(view.home);
@@ -53,6 +70,50 @@ export class Director {
     this.move = { from: copyPose(this.now), to: null, t: 0, len: seconds, arc: 0 };
   }
 
+  /**
+   * Back to the top view over `seconds`, keeping the whole table in the picture: first, from where it stands,
+   * the camera turns and opens out to hold all of `table` (its corners); then it rises, turned on the table and
+   * wide enough to hold it at every moment, easing into the exact top view only at the end. No panning down
+   * with the table sliding out of the top of the picture.
+   */
+  rise(seconds: number, table: THREE.Vector3[]) {
+    if (!this.view.free) return;
+    this.move = { from: copyPose(this.now), to: null, t: 0, len: seconds, arc: 0, table };
+  }
+
+  private riseStep(m: NonNullable<Director["move"]>) {
+    const T = Math.min(1, m.t / m.len), s = smooth(T);
+    const home = this.view.home, a = m.from, n = this.now, aspect = this.view.camera.aspect, table = m.table!;
+    n.eye.lerpVectors(a.eye, home.eye, s);
+    const up = a.up.clone().lerp(home.up, s).normalize();
+    // Toward the whole table: turned on its middle (the mean of the directions to its corners).
+    const onTable = new THREE.Vector3();
+    for (const p of table) onTable.add(p.clone().sub(n.eye).normalize());
+    onTable.normalize();
+    // 1. From the last shot's framing to the whole table, in the first fifth.
+    const k1 = smooth(Math.min(1, T / 0.2));
+    const dir = a.look.clone().sub(a.eye).normalize().lerp(onTable, k1).normalize();
+    let fov = a.fov;
+    // 2. Into the exact top view, in the last third.
+    const w = smooth(Math.max(0, Math.min(1, (T - 0.66) / 0.34)));
+    dir.lerp(home.look.clone().sub(home.eye).normalize(), w).normalize();
+    if (Math.abs(dir.dot(up)) > 0.999) up.copy(home.up);
+    // Just wide enough for the table at every moment (from the turn on), becoming the top view's at the end.
+    const need = fovFor(n.eye, dir, up, table, aspect);
+    fov += (need - fov) * k1;
+    // Late: the top view's own lens is a little narrower than this framing (it leaves less room); handing over
+    // early let a corner slip off a narrow screen while the camera was still turning.
+    fov += (home.fov - fov) * w * w * w * w;
+    n.look.copy(n.eye).add(dir);
+    n.fov = fov;
+    n.shiftX = a.shiftX + (home.shiftX - a.shiftX) * w;
+    n.shiftY = a.shiftY + (home.shiftY - a.shiftY) * w;
+    n.up.copy(up).addScaledVector(dir, -up.dot(dir)).normalize();
+  }
+
+  /** How far along a rise home is (0 to 1), or null when not rising. */
+  get rising() { return this.move?.table ? Math.min(1, this.move.t / this.move.len) : null; }
+
   /** On a move: done by now? */
   get moving() { return this.move !== null; }
 
@@ -60,6 +121,12 @@ export class Director {
     const m = this.move;
     if (!m) return;
     m.t += dt;
+    if (m.table) {
+      if (m.t >= m.len) { this.move = null; this.view.free = false; this.view.place(this.view.home); return; }
+      this.riseStep(m);
+      this.view.place(this.now);
+      return;
+    }
     const k = smooth(Math.min(1, m.t / m.len));
     const to = m.to ?? this.view.home;
     const a = m.from, n = this.now;
