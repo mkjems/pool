@@ -10,7 +10,13 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 ## Next session
 
-**Pick up here (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
+**Pick up here (21 November, later):** step 2b, **highlight replays**, comes before the cinematic break (the
+user, 21 November): replays play by themselves for the winning shot and for nice shots, in every mode but
+practice (manual there); in friend matches the player in turn may play a replay on both screens. The
+detector is done (`src/sim/highlight.ts`); next: play highlights automatically, with the reason on the
+badge, then the shared replay in friend matches.
+
+**Earlier (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
 not pushed: the camera director, lamps, and the winning shot replayed from low. The user saw the first version
 and set the rules: cameras outside the table looking in, never first person, cuts for every collision that
 matters and every ball going down (see step 2). Ask how it looks
@@ -756,6 +762,36 @@ to make clips for spreading the word). Four steps:
   - 60 fps at 2560 × 1300 × 2 from low cameras. `place` updates the camera's matrices at once (toScreen right
     after a cut used the old camera). Browser tests: the winning replay plays from low and ends in the top
     view; a click skips it to the card.
+- [ ] 2b. Highlight replays (21 November, the user: replays should play by themselves, for the winning shot
+  and for nice and extraordinary shots). Three parts:
+  - [x] Detector: `src/sim/highlight.ts`, pure and deterministic like the rules, so both browsers in a
+    friend match pick the same shots without a message. A shot counts only if it went well for the shooter
+    (no foul, a ball of theirs down; not the break, which step 3 shows). Kinds: bank, kick, combination,
+    carom, two or three balls at once, long pot, thin cut; each weighs something, a replay above a
+    threshold. Tuned with `npm run selfplay` (how often each kind comes, aim: about one highlight a game
+    besides the winning shot). The badge says why ("Bank shot", "Combination", "3 balls"). (21 November)
+    - How: `highlight(state, before, shot, verdict)` plays the shot again, keeping each event with the balls'
+      motion just before and after it, and follows each ball down back to the cue ball: what sent it is the
+      last collision (over 0.15 m/s) in which the other ball came in faster. Only a **clean chain** counts:
+      no ball in it touched another (0.1 m/s) between being sent and sending on, and the cue ball touched at
+      most one ball first (a carom). Without that, a cluster scramble or a ball kissing another on its way
+      read as combinations (half of them at first). Bank: a cushion after being sent, more than 0.2 m from
+      the pocket it fell in (not the jaws). Kick: a cushion the cue ball left at least 0.3 m before its first
+      contact (not brushing the rail beside the ball). Weights: bank 1 (two rails 1.5), kick 1 (1.5),
+      combination 0.5 + 0.5 per ball between, carom 1, two balls 0.6, three 1; direct pots only: long 0 to
+      1 over 1.3 to 2.1 m of travel, thin cut 0 to 0.8 from 55° to 80°. Replay from 1 (`HIGHLIGHT`). About
+      0.65 ms a shot.
+    - Self-play, 40 games: hard 0.57 replays a game besides the win, medium 0.65, easy 1.4 (longer, scrappier
+      games). Most: bank, combination, double bank, long pot, carom. No kicks: the computer doesn't play
+      them; people will. Tune after playing.
+    - Tests: `tests/highlight.test.ts` (each kind from a real layout, the short straight pot that is not
+      one, fouls, the opponent's ball, the break); `npm run engines` compares the highlights too.
+  - [ ] Automatic: camera angles, skippable, never blocking a shot (the computer waits for it). Against the
+    computer, friend matches and two players on one screen; **practice stays manual** (the user).
+  - [ ] Friend matches: the player in turn may start a replay (the menu) on both screens: a `replay` message
+    with the shot's number and top-down or camera angles, passed on by the relay and not kept. The watcher
+    may skip on their own screen; the player in turn skipping ends it for both. The menu stays until we
+    decide to remove it.
 - [ ] 3. Cinematic break: low behind the cue ball, slow motion as the rack opens, rising into the top view.
   First break of a session; an option to turn it off.
 - [ ] 4. Clips for posting: a `?test` hook and a script that renders a replay frame by frame at an exact
