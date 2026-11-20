@@ -12,9 +12,9 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 **Pick up here (21 November, later):** step 2b, **highlight replays**, comes before the cinematic break (the
 user, 21 November): replays play by themselves for the winning shot and for nice shots, in every mode but
-practice (manual there); in friend matches the player in turn may play a replay on both screens. The
-detector and the automatic replays are done; ask how they feel (how often, the pause, the badge). Next: the
-shared replay in friend matches (the player in turn plays it on both screens).
+practice (manual there); in friend matches the player in turn may play a replay on both screens. Step 2b is
+done: the detector, the automatic replays, the shared replay in friend matches. Ask how they feel (how
+often, the 0.6 s pause, the badge, the shared replay with a friend). Next: step 3, the cinematic break.
 
 **Earlier (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
 not pushed: the camera director, lamps, and the winning shot replayed from low. The user saw the first version
@@ -762,7 +762,7 @@ to make clips for spreading the word). Four steps:
   - 60 fps at 2560 × 1300 × 2 from low cameras. `place` updates the camera's matrices at once (toScreen right
     after a cut used the old camera). Browser tests: the winning replay plays from low and ends in the top
     view; a click skips it to the card.
-- [ ] 2b. Highlight replays (21 November, the user: replays should play by themselves, for the winning shot
+- [x] 2b. Highlight replays (21 November, the user: replays should play by themselves, for the winning shot
   and for nice and extraordinary shots). Three parts:
   - [x] Detector: `src/sim/highlight.ts`, pure and deterministic like the rules, so both browsers in a
     friend match pick the same shots without a message. A shot counts only if it went well for the shooter
@@ -800,10 +800,22 @@ to make clips for spreading the word). Four steps:
       whose turn; the same shot in practice doesn't. Not yet tested: both screens of a friend match
       replaying the same highlight (comes with the shared replay).
     - To judge: how often it comes, whether 0.6 s is the right pause, the reasons on the badge.
-  - [ ] Friend matches: the player in turn may start a replay (the menu) on both screens: a `replay` message
+  - [x] Friend matches: the player in turn may start a replay (the menu) on both screens: a `replay` message
     with the shot's number and top-down or camera angles, passed on by the relay and not kept. The watcher
     may skip on their own screen; the player in turn skipping ends it for both. The menu stays until we
-    decide to remove it.
+    decide to remove it. (21 November)
+    - `replay {id, n, low}` and `skip {id, n}` (`src/net/net.ts`), passed on like `aim`. `n` is the shot's
+      number in the match (`Played.n`). Sent only during the game by the player in turn (`r.from === "aim"`
+      and not `watching()`); after the game each watches their own. The friend plays it once that shot has
+      played out on their screen too and no highlight replay is about to start; a later shot drops it.
+      `skipReplay()` is every way a player stops one (a click, Esc, R, the button): the player in turn's
+      sends `skip` (also for a highlight's replay, so the friend is back to watching their cue), the
+      friend's stops only their own. `playShot` sends and plays a shot (`shoot` and `__pool.play`).
+    - Browser test: a bank shot replays by itself on both screens; the player in turn's skip stops both;
+      their camera-angles and top-down replays play on both; the friend's skip stops only theirs.
+      `__pool.settled()` (still, and no replay or friend's shot coming): the friend-match checks wait for
+      it, since a random shot can now be a highlight (its replay starts 0.6 s after the table is still,
+      and the join-by-code scenario aimed into it 1 run in 4).
 - [ ] 3. Cinematic break: low behind the cue ball, slow motion as the rack opens, rising into the top view.
   First break of a session; an option to turn it off.
 - [ ] 4. Clips for posting: a `?test` hook and a script that renders a replay frame by frame at an exact

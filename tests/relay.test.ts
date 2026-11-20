@@ -53,6 +53,10 @@ describe("friend-match relay", () => {
     expect(await a.next("start")).toMatchObject({ id: "m1", by: 0 }); // the sender gets it too: both begin on it
     a.send({ t: "aim", x: 1, y: 0 });
     expect(await b.next("aim")).toMatchObject({ x: 1 });
+    a.send({ t: "replay", id: "m1", n: 0, low: true });
+    expect(await b.next("replay")).toMatchObject({ n: 0, low: true });
+    a.send({ t: "skip", id: "m1", n: 0 });
+    expect(await b.next("skip")).toMatchObject({ n: 0 });
     b.send({ t: "shot", id: "m1", n: 1, shot: { speed: 3 } });
     expect(await a.next("shot")).toMatchObject({ n: 1 });
     b.send({ t: "name", name: "  Bodil  " });

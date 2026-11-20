@@ -21,7 +21,7 @@ import { CueView, GuideView, type GuidePath } from "./render/cue";
 import { Markers } from "./render/markers";
 import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
-import { Link, savedSeat, type AimMsg, type FromRelay, type ShotMsg, type Start } from "./net/net";
+import { Link, savedSeat, type AimMsg, type FromRelay, type ReplayMsg, type ShotMsg, type Start } from "./net/net";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over" | "replay";
 type Mode = "practice" | "pass" | "cpu" | "online";
@@ -65,7 +65,7 @@ let pendingShot: Shot | null = null;
 let struck: { before: Ball[]; shot: Shot; turns: THREE.Quaternion[] } | null = null;
 /** A shot played out: where from, the shot, how the balls were turned, and what happened (to pace the replay);
  * what made it special, if anything (src/sim/highlight.ts; not in practice). */
-interface Played { before: Ball[]; shot: Shot; turns: THREE.Quaternion[]; events: SimEvent[]; h: Highlight | null }
+interface Played { before: Ball[]; shot: Shot; turns: THREE.Quaternion[]; events: SimEvent[]; h: Highlight | null; n: number }
 /** The last shot, to watch again. A new game forgets it. */
 let lastPlayed: Played | null = null;
 /**
@@ -180,6 +180,8 @@ let friendHere = false;
 /** The friend's shots, played in turn once the table is still. */
 const remoteShots: ShotMsg[] = [];
 let remoteAim: AimMsg | null = null;
+/** The friend, in turn, watches the last shot again: so do we, once that shot has played out here too. */
+let remoteReplay: ReplayMsg | null = null;
 let aimSent = { at: -1, key: "" };
 let myLastShot: ShotMsg | null = null;
 let myName = store.get("name") ?? "";
@@ -305,6 +307,14 @@ function onNet(m: FromRelay) {
     case "aim":
       remoteAim = m;
       break;
+    case "replay":
+      if (match && m.id === match.id) remoteReplay = m;
+      break;
+    case "skip":
+      if (!match || m.id !== match.id) break;
+      if (remoteReplay?.n === m.n) remoteReplay = null;
+      if (replaying && replaying.p.n === m.n) endReplay();
+      break;
     case "left":
       friendHere = false;
       awayBanner();
@@ -337,6 +347,16 @@ function onNet(m: FromRelay) {
 function online(dt: number) {
   // The friend skipped the replay and played: their shot comes first.
   if (state === "replay" && remoteShots.length) endReplay();
+  // The friend replays the last shot for both of us (when it has played out here too; a later shot drops it).
+  if (remoteReplay) {
+    const r = remoteReplay;
+    if (!lastPlayed || r.n < lastPlayed.n || remoteShots.length) remoteReplay = null;
+    else if (r.n === lastPlayed.n && (state === "aim" || state === "replay") && !laterTimer) {
+      remoteReplay = null;
+      endReplay();
+      startReplay(r.low, true);
+    }
+  }
   if (state === "aim" && remoteShots.length) {
     remoteShots.sort((a, b) => a.n - b.n);
     playRemote(remoteShots.shift()!);
@@ -453,9 +473,14 @@ function shoot(p: number) {
   // The tilt goes with the shot, so a friend's game plays it exactly as drawn here.
   const shot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height,
     tilt: cueTilt(balls, aim.x, aim.y, tip.side, tip.height) };
-  if (mode === "online") {
-    // Sent before it is played, with the exact position and game it is played from.
-    if (!link || link.status !== "open") { toast("Reconnecting. Shoot when you're back online."); return; }
+  // In a friend match it is sent before it is played (playShot): not while the connection is down.
+  if (mode === "online" && (!link || link.status !== "open")) { toast("Reconnecting. Shoot when you're back online."); return; }
+  playShot(shot);
+}
+
+/** Play a shot of this browser's player: in a friend match it is sent first, with the exact position and game. */
+function playShot(shot: Shot) {
+  if (mode === "online" && link) {
     shotNo++;
     myLastShot = { t: "shot", id: match!.id, n: shotNo, balls: cloneBalls(balls), game: { ...game }, called, shot };
     link.send(myLastShot);
@@ -526,7 +551,7 @@ function respawnCue() {
 
 function endOfShot() {
   const events = sim!.events;
-  if (struck) lastPlayed = { ...struck, events, h: null };
+  if (struck) lastPlayed = { ...struck, events, h: null, n: shotNo };
   balls = sim!.balls;
   sim = null;
   tip = { side: 0, height: 0 };
@@ -779,7 +804,7 @@ function pocketNear(px: number, py: number): number {
 canvas.addEventListener("pointerdown", (e) => {
   sound.haptics = e.pointerType === "touch";
   sound.unlock();
-  if (state === "replay") { endReplay(); return; }
+  if (state === "replay") { skipReplay(); return; }
   if (state !== "aim" || watching()) return;
   canvas.setPointerCapture(e.pointerId);
   // The right button opens the spin pad (a press during a pull cancels it, in pointermove: a second button
@@ -1035,8 +1060,8 @@ window.addEventListener("keydown", (e) => {
   if (k === "g") guideBtn.click();
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
-  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; showReplayMenu(false); endReplay(); }
-  else if (k === "r" && !e.repeat) { showReplayMenu(false); if (state === "replay") endReplay(); else startReplay(e.shiftKey); }
+  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; showReplayMenu(false); skipReplay(); }
+  else if (k === "r" && !e.repeat) { showReplayMenu(false); if (state === "replay") skipReplay(); else startReplay(e.shiftKey); }
   else if (watching()) return;
   else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
   else if (k === "w") setTip(tip.side, tip.height + 0.1);
@@ -1160,10 +1185,24 @@ function startReplay(low = false, auto = false) {
   $("#over").hidden = true;
   $("#toast").classList.remove("show");
   showSlowness(REPLAY_SLOW);
+  // In a friend match the player in turn replays for both (not after the game: then each watches their own).
+  if (!auto && mode === "online" && replaying.from === "aim" && !watching() && link && match) {
+    const m: ReplayMsg = { t: "replay", id: match.id, n: p.n, low };
+    link.send(m);
+  }
   replayWhy.textContent = p.h?.label ?? "";
   replayWhy.hidden = !replayWhy.textContent;
   replayBadge.hidden = false;
   replayBtn.classList.add("on");
+}
+
+/** The player stops the replay (a click, Esc, R, the button). In a friend match, the player in turn stops it for
+ * both; the friend watching stops only their own. */
+function skipReplay() {
+  const r = replaying;
+  if (!r) return;
+  if (mode === "online" && r.from === "aim" && !watching() && link && match) link.send({ t: "skip", id: match.id, n: r.p.n });
+  endReplay();
 }
 
 /** Back to the table as it is. The replay ends where the shot did, so nothing jumps (but a re-placed cue ball). */
@@ -1223,7 +1262,7 @@ function showReplayMenu(open: boolean) {
   replayMenu.hidden = !open;
   replayBtn.setAttribute("aria-expanded", String(open));
 }
-replayBtn.addEventListener("click", () => (state === "replay" ? endReplay() : showReplayMenu(replayMenu.hidden)));
+replayBtn.addEventListener("click", () => (state === "replay" ? skipReplay() : showReplayMenu(replayMenu.hidden)));
 replayMenu.querySelectorAll<HTMLButtonElement>("button").forEach((b) =>
   b.addEventListener("click", () => { showReplayMenu(false); startReplay(b.dataset.replay === "cam"); }));
 // A press anywhere else closes it.
@@ -1391,10 +1430,12 @@ if (new URLSearchParams(location.search).has("test")) {
     timeScale: (k: number) => { timeScale = k; },
     replay: (low = false) => startReplay(low),
     replayPhase: () => replaying?.phase ?? null,
+    /** The table is still and nothing is coming: no replay (a highlight's, a friend's), no friend's shot. */
+    settled: () => (state === "aim" || state === "over") && !laterTimer && !remoteReplay && remoteShots.length === 0,
     /** What made the last shot special (src/sim/highlight.ts), or null. */
     highlight: () => lastPlayed?.h ?? null,
     /** Play this exact shot (direction, speed, tip), as the shooter would. */
-    play: (shot: Shot) => shootExact(shot),
+    play: (shot: Shot) => playShot(shot),
     /** The low replay's plan: when each camera comes, the slow stretches, the rise. */
     cine: () => replaying?.cine ? { beats: replaying.cine.beats.map((b) => b.from), slow: replaying.cine.slow, riseAt: replaying.cine.riseAt } : null,
     /** The camera is away from the top view (the director has it). */

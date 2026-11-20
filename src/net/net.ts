@@ -11,6 +11,10 @@ export interface ShotMsg { t: "shot"; id: string; n: number; balls: Ball[]; game
 /** The shooter's cue while aiming: direction, pull-back, tip, cue-ball position, the pocket called. */
 export interface AimMsg { t: "aim"; x: number; y: number; p: number; s: number; h: number; cx: number; cy: number; c: number | null }
 
+/** The player in turn watches the last shot again, and the friend with them; `skip`: they stopped watching it. */
+export interface ReplayMsg { t: "replay"; id: string; n: number; low: boolean }
+export interface SkipMsg { t: "skip"; id: string; n: number }
+
 export type FromRelay =
   | { t: "room"; code: string; seat: Player; key: string; names: [string, string] }
   | { t: "joined"; names: [string, string] }
@@ -19,6 +23,8 @@ export type FromRelay =
   | ({ t: "start"; by: Player } & Start)
   | ShotMsg
   | AimMsg
+  | ReplayMsg
+  | SkipMsg
   | { t: "left" | "back" | "gone"; seat: Player }
   | { t: "reload" }
   | { t: "error"; message: string; over?: boolean }

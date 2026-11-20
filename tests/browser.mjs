@@ -352,8 +352,9 @@ async function pair(open) {
 }
 const snapshot = (p) => pool(p, () => ({ ...window.__pool.online(), turn: window.__pool.game().turn, balls: window.__pool.balls().map((b) => [b.on, b.x, b.y]) }));
 async function agree(a, b, what) {
-  // Still, and no shot of the friend's waiting to be played (a reloaded page replays the latest one).
-  const settled = () => ["aim", "over"].includes(window.__pool.state()) && window.__pool.online().queued === 0;
+  // Still, and nothing coming: no shot of the friend's waiting to be played (a reloaded page replays the latest
+  // one), no highlight's replay about to start or playing.
+  const settled = () => window.__pool.settled();
   for (let k = 0; k < 2; k++) {
     for (const p of [a, b]) await p.waitForFunction(settled, null, { timeout: 30000 });
     await a.waitForTimeout(250);
@@ -391,6 +392,49 @@ await scenario("friend match: join by code, same shots, live aim, reload, rematc
   await b.click("#b-menu");
   await a.waitForSelector("#over:not([hidden])", { timeout: 10000 });
   check((await a.textContent("#over-title")) === "Anna's friend left" || (await a.textContent("#over-title")).endsWith("left"), "the other is told");
+});
+
+await scenario("friend match: replays on both screens; the player in turn starts and stops them", async (open) => {
+  const { a, b } = await pair(open);
+  // Anna (seat 0) to play a bank shot (tests/highlight.test.ts), from the same position on both screens.
+  const bank = { dx: 0.8553642601605067, dy: 0.5180270093731302, speed: 2.5, side: 0, height: 0 };
+  for (const p of [a, b]) {
+    await pool(p, () => {
+      window.__pool.place([[0, -0.5, -0.1], [1, 0, 0.25], [9, -0.9, 0.4]]);
+      window.__pool.setGame({ groups: ["solids", "stripes"], breakShot: false, ballInHand: "none", turn: 0 });
+    });
+  }
+  await pool(a, (bank) => window.__pool.play(bank), bank);
+  // The highlight replays by itself on both screens, saying why.
+  for (const p of [a, b]) await waitState(p, "replay", 15000);
+  for (const p of [a, b]) check((await p.textContent("#replay-badge .why")) === "Bank shot", "both see the bank replayed");
+  // Anna, in turn, skips it: for both.
+  await a.waitForTimeout(600);
+  await a.mouse.click(640, 400);
+  check((await pool(a, () => window.__pool.state())) === "aim", "the player in turn skips it");
+  await waitState(b, "aim", 3000); // and for the friend too
+  // (The button follows in the next frame.)
+  check(await b.waitForFunction(() => document.querySelector("#b-replay").disabled, null, { timeout: 2000 }).then(() => true, () => false),
+    "the friend can't start one (not their turn)");
+  // Anna replays it with camera angles: the friend watches it too.
+  await a.click("#b-replay");
+  await a.click("[data-replay=cam]");
+  await waitState(b, "replay", 3000);
+  check(await pool(b, () => window.__pool.camAway()), "the friend sees it with camera angles too");
+  // The friend stops watching: only on their screen.
+  await b.waitForTimeout(500);
+  await b.mouse.click(640, 400);
+  check((await pool(b, () => window.__pool.state())) === "aim", "the friend skips their own");
+  await a.waitForTimeout(500);
+  check((await pool(a, () => window.__pool.state())) === "replay", "the player in turn still watches");
+  await a.keyboard.press("Escape");
+  check((await pool(a, () => window.__pool.state())) === "aim", "Esc ends it");
+  // Top-down, played to its end on both.
+  await pool(a, () => window.__pool.replay(false));
+  await waitState(b, "replay", 3000);
+  check(!(await pool(b, () => window.__pool.camAway())), "top-down for the friend too");
+  for (const p of [a, b]) await waitState(p, "aim", 30000);
+  await agree(a, b, "the same table after the replays");
 });
 
 await scenario("friend match: a dropped connection shows a banner until the friend is back", async (open) => {
