@@ -11,7 +11,7 @@
 // The shot is played once ahead (the physics is deterministic) to know where each ball is when.
 
 import * as THREE from "three";
-import { CUSHION_W, R, TABLE_L, TABLE_W } from "../sim/constants";
+import { CUSHION_W, R, RAIL_W, TABLE_L, TABLE_W, WOOD_H } from "../sim/constants";
 import { Sim, type Ball, type Shot, type SimEvent } from "../sim/physics";
 import { TABLE } from "../sim/table";
 import type { Pose } from "./scene";
@@ -29,15 +29,16 @@ type Pot = Extract<SimEvent, { type: "pocket" }>;
 type Hit = Extract<SimEvent, { type: "ball" }>;
 
 const HX = TABLE_L / 2 + CUSHION_W, HY = TABLE_W / 2 + CUSHION_W; // the backs of the cushions
+const OX = HX + RAIL_W, OY = HY + RAIL_W; // the outer edges of the wooden rails
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
-/** From (x, y), going along the unit (wx, wy): how far to the backs of the cushions. */
-function toEdge(x: number, y: number, wx: number, wy: number) {
+/** From (x, y), going along the unit (wx, wy): how far to the backs of the cushions (or to the box ex, ey). */
+function toEdge(x: number, y: number, wx: number, wy: number, ex = HX, ey = HY) {
   let t = Infinity;
-  if (wx > 1e-6) t = Math.min(t, (HX - x) / wx);
-  if (wx < -1e-6) t = Math.min(t, (-HX - x) / wx);
-  if (wy > 1e-6) t = Math.min(t, (HY - y) / wy);
-  if (wy < -1e-6) t = Math.min(t, (-HY - y) / wy);
+  if (wx > 1e-6) t = Math.min(t, (ex - x) / wx);
+  if (wx < -1e-6) t = Math.min(t, (-ex - x) / wx);
+  if (wy > 1e-6) t = Math.min(t, (ey - y) / wy);
+  if (wy < -1e-6) t = Math.min(t, (-ey - y) / wy);
   return Math.max(0, t);
 }
 
@@ -64,17 +65,24 @@ export function framed(eye: THREE.Vector3, points: THREE.Vector3[], aspect: numb
 /**
  * A wide shot of `points` from the side `w` points to (unit, from them toward the camera): outside the table,
  * at least `minD` from their middle and backed away until they all fit in `maxFov`, looking down at about `elev`
- * degrees.
+ * degrees. `edges`: the table's wooden edges, near and far along the line of sight, in the picture too (bottom
+ * and top), so it is clearly a table seen whole across. Returns the points it framed.
  */
-function establish(w: THREE.Vector2, points: THREE.Vector3[], aspect: number, minFov: number, maxFov: number, elev = 25, minD = 0.9) {
-  const cx = points.reduce((s, p) => s + p.x, 0) / points.length, cy = points.reduce((s, p) => s + p.y, 0) / points.length;
+function establish(w: THREE.Vector2, actors: THREE.Vector3[], aspect: number, minFov: number, maxFov: number, elev = 25, minD = 0.9, edges = false) {
+  const cx = actors.reduce((s, p) => s + p.x, 0) / actors.length, cy = actors.reduce((s, p) => s + p.y, 0) / actors.length;
+  const points = actors.slice();
+  if (edges) {
+    // A little past the wood, so it shows with some room round it.
+    const near = toEdge(cx, cy, w.x, w.y, OX, OY) + 0.07, far = toEdge(cx, cy, -w.x, -w.y, OX, OY) + 0.1;
+    points.push(new THREE.Vector3(cx + w.x * near, cy + w.y * near, WOOD_H), new THREE.Vector3(cx - w.x * far, cy - w.y * far, WOOD_H));
+  }
   const tan = Math.tan(THREE.MathUtils.degToRad(elev));
   let D = Math.max(minD, toEdge(cx, cy, w.x, w.y) + 0.3), pose: Pose;
   for (;; D += 0.1) {
     pose = framed(new THREE.Vector3(cx + w.x * D, cy + w.y * D, clamp(D * tan, 0.4, 0.85)), points, aspect, minFov, 120);
     if (pose.fov <= widen(maxFov, aspect) || D > 4) break;
   }
-  return { pose: framed(pose.eye, points, aspect, minFov, maxFov), D };
+  return { pose: framed(pose.eye, points, aspect, minFov, maxFov), D, points };
 }
 
 /** The same camera a little closer to what it looks at, framed on the same points: to ease toward. */
@@ -161,22 +169,24 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
   }
   const tanTilt = tilt / Math.sqrt(1 - tilt * tilt);
   const firstDown = kept[0];
-  let best: { pose: Pose; score: number } | null = null;
+  let best: { pose: Pose; score: number; points: THREE.Vector3[] } | null = null;
   for (const [deg, behind] of [[25, false], [-25, false], [40, false], [-40, false], [150, true], [-150, true]] as const) {
     const w = rotate(d, deg); // from the cue ball toward the camera
-    let { pose, D } = establish(w, shotPts, aspect, 40, 55);
+    const est = establish(w, shotPts, aspect, 40, 58, 25, 0.9, true);
+    let pose = est.pose;
+    const D = est.D;
     // On the shooter's side the cue rises toward the camera: stay above it.
     const cueTop = R + Math.min(pose.eye.distanceTo(c0), 1.6) * 0.87 * tanTilt + 0.12;
-    if (behind && pose.eye.z < cueTop) pose = framed(new THREE.Vector3(pose.eye.x, pose.eye.y, cueTop), shotPts, aspect, 40, 55);
+    if (behind && pose.eye.z < cueTop) pose = framed(new THREE.Vector3(pose.eye.x, pose.eye.y, cueTop), est.points, aspect, 40, 58);
     const look = new THREE.Vector2(-w.x, -w.y);
     // Near enough to read the balls; the far side preferred (the cue ball comes toward us).
     let score = Math.max(0, D - 1.3) * 0.6 + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0) + (pose.eye.z > 1 ? 1 : 0);
     if (firstDown && angle(look, firstDown.dir) < THREE.MathUtils.degToRad(40)) score += 0.8;
-    if (!best || score < best.score) best = { pose, score };
+    if (!best || score < best.score) best = { pose, score, points: est.points };
   }
   const opening = best!.pose;
 
-  const beats: Beat[] = [{ from: 0, pose: opening, push: closer(opening, shotPts, aspect, 0.04, 40, 56), cut: true }];
+  const beats: Beat[] = [{ from: 0, pose: opening, push: framed(opening.eye.clone().lerp(new THREE.Vector3(0, 0, opening.eye.z), 0.02), best!.points, aspect, 40, 58), cut: true }];
   for (const k of kept) beats.push({ from: k.from, pose: k.pose, push: k.push, cut: true });
 
   // Slow motion: the stroke and first contact; round each ball going down. Stretches close together join.

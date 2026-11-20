@@ -705,12 +705,15 @@ to make clips for spreading the word). Four steps:
     person); cut so every collision that matters and every ball going down is seen. A replay tells what
     happened, so it stays wide: the opening is an establishing shot holding every actor (cue ball, the ball it
     hits, each ball that goes down and its pocket), and the cuts hold the collision, the ball's path and the
-    pocket. No close-ups in a replay; they belong to a montage (step 3, the cinematic break).
+    pocket. No close-ups in a replay; they belong to a montage (step 3, the cinematic break). The opening
+    has the table's wooden edges, near and far, in the picture (no cloth running out of the frame at the
+    bottom or top).
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
     the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
     distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
     the cut changes the picture). `establish`: from the actors' middle, out past the table along the chosen
-    side, then further back until a lens of at most 55° holds them all (`framed`: turned and zoomed for the
+    side, then further back until a lens of at most 58° holds them all and the outer edges of the wood
+    near and far along the line of sight (with 7 and 10 cm of room) (`framed`: turned and zoomed for the
     screen's shape), looking down about 25° (camera 0.4 to 0.85 m up). Then one beat per ball going down:
     from beyond its pocket, looking back along its last roll (it comes toward us), from 0.3 s before the
     collision that sent it (just after the first contact if that was it; at least 0.45 s before the drop),
