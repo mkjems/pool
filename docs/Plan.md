@@ -675,8 +675,12 @@ to make clips for spreading the word). Four steps:
   or the game is about to move on (re-rack, game-over card coming); a new game forgets the last shot.
   - Also: on laptops the top-bar buttons ran into the centred score (1024 px always, 1280 px once the
     trays filled); now the score moves to the top right when they would meet (`.score.aside`, fitView).
-  - To judge: the slow-motion speed and when it speeds up; whether the sounds should drop in pitch in slow
-    motion (they don't yet).
+  - The user (20 November): didn't see the Replay button (found R); hard to tell slow motion from normal
+    speed. Now: two speeds only, slow, then back to normal speed (no fast-forward); the badge says "in slow
+    motion" (amber) or "at normal speed"; the screen's edges darken while it is slowed down; the sounds drop
+    in pitch with it (`sound.pitch`); the Replay button glows twice when it is offered after a shot. Toasts
+    that come during a replay wait for its end (the badge stands where they appear).
+  - To judge: whether the button is found now, the slow-motion speed, the darkened edges.
 - [ ] 2. A camera director and a low camera: the winning shot replayed automatically, from low, ending on the
   pocket. Always ends on the fitted top view. Needs visible lamp shades above the table and a look at the cloth
   and shadows at grazing angles. HUD, labels and markers hidden while it plays.

@@ -1068,7 +1068,10 @@ new ResizeObserver(() => {
 fitView();
 
 let toastTimer = 0;
+/** A message that came during a replay, shown when it ends (the badge stands where toasts do). */
+let heldToast: string | null = null;
 function toast(msg: string) {
+  if (state === "replay") { heldToast = msg; return; }
   const t = $("#toast");
   t.textContent = msg;
   t.classList.add("show");
@@ -1078,9 +1081,17 @@ function toast(msg: string) {
 
 // ------------------------------------------------------------------ replay
 
-const REPLAY_SLOW = 0.35, REPLAY_FAST = 2.5;
+const REPLAY_SLOW = 0.35;
 const replayBtn = $<HTMLButtonElement>("#b-replay");
-const replayBadge = $("#replay-badge");
+const replayBadge = $("#replay-badge"), replaySpeed = $("#replay-badge .speed"), replayVeil = $("#replay-veil");
+/** How slow the replay is now, 1 at its slowest, 0 at normal speed: the badge, the darkened edges, the pitch. */
+function showSlowness(rate: number) {
+  const k = Math.max(0, Math.min(1, (1 - rate) / (1 - REPLAY_SLOW)));
+  replaySpeed.textContent = k > 0.5 ? "in slow motion" : "at normal speed";
+  replayBadge.classList.toggle("slow", k > 0.5);
+  replayVeil.style.opacity = String(k);
+  sound.pitch = 1 - 0.38 * k;
+}
 
 /** Not while someone else is to shoot, nor while the game is about to move on (re-rack, game-over card). */
 function canReplay() {
@@ -1113,6 +1124,7 @@ function startReplay() {
   spinPad.hidden = true;
   $("#over").hidden = true;
   $("#toast").classList.remove("show");
+  showSlowness(REPLAY_SLOW);
   replayBadge.hidden = false;
   replayBtn.classList.add("on");
 }
@@ -1130,6 +1142,8 @@ function endReplay() {
   state = r.from;
   if (state === "over") $("#over").hidden = false;
   replayBadge.hidden = true;
+  showSlowness(1);
+  if (heldToast) { toast(heldToast); heldToast = null; }
   replayBtn.classList.remove("on");
   guideDirty = true;
 }
@@ -1142,8 +1156,8 @@ function runReplay(dt: number) {
   } else if (r.phase === "stroke") {
     if (r.t * REPLAY_SLOW >= 0.07) { sim!.strike(r.p.shot); r.phase = "run"; r.t = 0; }
   } else if (r.phase === "run") {
-    // Past the part that matters: speed up smoothly over about half a second.
-    if (sim!.t > r.slowUntil) r.rate = Math.min(REPLAY_FAST, r.rate + dt * 4.5);
+    // Past the part that matters: back to normal speed over half a second, for the balls rolling out.
+    if (sim!.t > r.slowUntil && r.rate < 1) { r.rate = Math.min(1, r.rate + dt * 1.3); showSlowness(r.rate); }
     runSim(dt * r.rate, r.rate);
     if (!sim!.moving() && !ballViews.some((v) => v.fall)) { r.phase = "hold"; r.t = 0; }
   } else if (r.t >= 0.6) endReplay();
@@ -1151,7 +1165,7 @@ function runReplay(dt: number) {
 
 replayBtn.addEventListener("click", () => (state === "replay" ? endReplay() : startReplay()));
 $("#b-over-replay").addEventListener("click", startReplay);
-replayBadge.textContent = matchMedia("(pointer: coarse)").matches ? "Replay · tap to skip" : "Replay · click to skip";
+$("#replay-badge .hint").textContent = matchMedia("(pointer: coarse)").matches ? "tap to skip" : "click to skip";
 
 // ------------------------------------------------------------------ frame loop
 
@@ -1278,7 +1292,12 @@ function frame(now: number) {
     cue.set(balls, aim.x, aim.y, pull, tip.side, tip.height, cueShown);
   }
   const canWatch = canReplay() || state === "replay";
-  if (replayBtn.disabled === canWatch) replayBtn.disabled = !canWatch;
+  if (replayBtn.disabled === canWatch) {
+    replayBtn.disabled = !canWatch;
+    // Just offered (a shot has played out): the button glows for a moment, so it is found.
+    replayBtn.classList.remove("fresh");
+    if (canWatch && state !== "replay") { void replayBtn.offsetWidth; replayBtn.classList.add("fresh"); }
+  }
 
   view.renderer.render(view.scene, view.camera);
   requestAnimationFrame(frame);

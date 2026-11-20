@@ -276,6 +276,9 @@ export class Sound {
    */
   private static SAMPLE = { ball: 0.83, cue: 0.6, pocket: 0.4 };
 
+  /** Every sound's playback speed: below 1 in a slow-motion replay, so the hits sound slowed down too. */
+  pitch = 1;
+
   /** rate: playback speed (pitch); lp: a low-pass cutoff (Hz) to make a recording duller, 0 for none. */
   private play(
     buf: AudioBuffer,
@@ -289,7 +292,7 @@ export class Sound {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = rate;
+    src.playbackRate.value = rate * this.pitch;
     let out: AudioNode = src;
     if (lp > 0 && lp < ctx.sampleRate * 0.45) {
       const f = ctx.createBiquadFilter();
