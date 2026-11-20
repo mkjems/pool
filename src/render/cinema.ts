@@ -1,27 +1,31 @@
-// The camera script of a replay seen from low (the winning shot). Every camera stands outside the table and
-// looks in at the action, framed to hold what matters: for the stroke, behind the cue ball (beyond the rail
-// behind it) with the cue ball and the ball it hits in the picture; then a cut to beyond the pocket, the ball
-// rolling toward us across the table and dropping in the foreground. A camera inside the table looking out at a
-// cushion tells nothing (the user, 21 November).
+// The camera script of a replay seen from low (the winning shot), in the user's rules (21 November):
+// - Every camera stands outside the table and looks in at the action; a camera inside the table filming out at a
+//   cushion or a lone pocket tells nothing.
+// - Never first person (along the cue). The opening films the shooter from the far side of the table, a little
+//   off the line, or from the shooter's side but well off the line: third person.
+// - Cuts are good: cut so that every collision that matters and every ball going down is seen.
+//
+// The shot is played once ahead (the physics is deterministic) to know where each ball is when.
 
 import * as THREE from "three";
 import { CUSHION_W, R, TABLE_L, TABLE_W } from "../sim/constants";
-import type { Ball, Shot, SimEvent } from "../sim/physics";
+import { Sim, type Ball, type Shot, type SimEvent } from "../sim/physics";
 import { TABLE } from "../sim/table";
 import type { Pose } from "./scene";
 
+/** From simulated time `from`, this camera; `push` is where it eases to while it is on. `cut`: a cut, not a glide. */
+export interface Beat { from: number; pose: Pose; push: Pose; cut: boolean }
+
 /**
- * Times are simulated seconds. `slow`: the stretches played in slow motion (the stroke and first contact, the
- * last moments before the drop and the fall); between them, normal speed.
+ * Times are simulated seconds. `slow`: the stretches played in slow motion (the stroke and first contact, and
+ * round each ball going down); between them, normal speed. `riseAt`: up into the top view.
  */
-export interface Cine {
-  stroke: Pose; strokeIn: Pose; pocket: Pose; pocketIn: Pose;
-  cut: number; pot: number; slow: Array<[number, number]>;
-  cutDone: boolean; rising: boolean;
-}
+export interface Cine { beats: Beat[]; next: number; slow: Array<[number, number]>; riseAt: number; rising: boolean }
+
+type Pot = Extract<SimEvent, { type: "pocket" }>;
+type Hit = Extract<SimEvent, { type: "ball" }>;
 
 const HX = TABLE_L / 2 + CUSHION_W, HY = TABLE_W / 2 + CUSHION_W; // the backs of the cushions
-const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 /** From (x, y), going along the unit (wx, wy): how far to the backs of the cushions. */
@@ -52,54 +56,114 @@ export function framed(eye: THREE.Vector3, points: THREE.Vector3[], aspect: numb
   return { eye: eye.clone(), look: eye.clone().add(f), up: new THREE.Vector3(0, 0, 1), fov, shiftX: 0, shiftY: 0 };
 }
 
+/** The same camera a little closer to what it looks at, framed on the same points: to ease toward. */
+function closer(p: Pose, points: THREE.Vector3[], aspect: number, k: number, minFov: number, maxFov: number) {
+  const centre = points.reduce((s, q) => s.add(q), new THREE.Vector3()).multiplyScalar(1 / points.length);
+  const eye = p.eye.clone().lerp(new THREE.Vector3(centre.x, centre.y, p.eye.z), k);
+  return framed(eye, points, aspect, minFov, maxFov);
+}
+
+/** Where every ball is, every 10 ms of the shot. */
+function track(before: readonly Ball[], shot: Shot) {
+  const sim = new Sim(before);
+  sim.strike(shot);
+  const frames: Float64Array[] = [];
+  const snap = () => frames.push(Float64Array.from(sim.balls.flatMap((b) => [b.x, b.y])));
+  snap();
+  for (let i = 1; sim.moving() && sim.t < 30; i++) {
+    sim.step();
+    if (i % 4 === 0) snap();
+  }
+  snap();
+  return {
+    events: sim.events,
+    at(id: number, t: number) {
+      const f = frames[clamp(Math.round(t / 0.01), 0, frames.length - 1)];
+      return new THREE.Vector3(f[id * 2], f[id * 2 + 1], R);
+    },
+  };
+}
+
+const angle = (a: THREE.Vector2, b: THREE.Vector2) => Math.acos(clamp(a.dot(b) / (a.length() * b.length() || 1), -1, 1));
+const rotate = (v: THREE.Vector2, deg: number) => v.clone().rotateAround(new THREE.Vector2(), THREE.MathUtils.degToRad(deg));
+
 /**
- * The script, if a ball went down (the 8 if it did, else the last one). `tilt`: the sine of the cue's rise.
- * `aspect`: the screen's width over height.
+ * The script, if an object ball went down. `tilt`: the sine of the cue's rise. `aspect`: the screen's width
+ * over height.
  */
-export function planCine(before: readonly Ball[], shot: Shot, tilt: number, events: readonly SimEvent[], aspect: number): Cine | null {
-  const pots = events.filter((e) => e.type === "pocket" && e.a !== 0) as Extract<SimEvent, { type: "pocket" }>[];
-  const pot = pots.find((e) => e.a === 8) ?? pots[pots.length - 1];
-  if (!pot) return null;
-  const c = before[0];
-  const d = new THREE.Vector2(shot.dx, shot.dy).normalize(), n = new THREE.Vector2(-d.y, d.x);
-  const first = events.find((e) => e.type === "ball");
-  const firstHit = events.find((e) => e.type === "ball" && (e.a === 0 || e.b === 0)) as Extract<SimEvent, { type: "ball" }> | undefined;
+export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspect: number): Cine | null {
+  const { events, at } = track(before, shot);
+  const pots = events.filter((e) => e.type === "pocket") as Pot[];
+  if (!pots.some((e) => e.a !== 0)) return null;
+  const hits = events.filter((e) => e.type === "ball") as Hit[];
+  const first = hits.find((e) => e.a === 0 || e.b === 0);
+  const tFirst = first?.t ?? 0;
 
-  // The stroke: beyond the rail behind the cue ball, looking along the shot. Higher the further back (to see
-  // over the cloth) and the more the cue is raised (to stay above it).
-  const back = toEdge(c.x, c.y, -d.x, -d.y) + 0.28;
+  // Each ball going down: from beyond its pocket, looking back along its last roll (it comes toward us), from
+  // before the collision that sent it there, holding that collision, its path and the pocket.
+  type Down = { pot: Pot; from: number; pose: Pose; push: Pose; dir: THREE.Vector2; weight: number };
+  const away = aspect < 1 ? 1.45 : 1; // further back on a phone held upright, or the pocket fills the picture
+  const downs: Down[] = pots.map((pot) => {
+    const P = TABLE.pockets[pot.pocket];
+    const u = new THREE.Vector2(pot.vx, pot.vy);
+    if (u.lengthSq() < 1e-8) u.set(P.ux, P.uy);
+    u.normalize();
+    const hit = hits.filter((e) => (e.a === pot.a || e.b === pot.a) && e.t < pot.t).pop();
+    let from = !hit ? pot.t - 0.6 : hit === first ? tFirst + 0.12 : hit.t - 0.3;
+    from = Math.max(0.3, Math.min(from, pot.t - 0.45));
+    const pts = [new THREE.Vector3(P.hx, P.hy, 0), at(pot.a, from), new THREE.Vector3(P.hx * 0.65, P.hy * 0.65, 0)];
+    if (hit && hit.t >= from - 0.05) pts.push(at(hit.a, hit.t), at(hit.b, hit.t));
+    const eye = new THREE.Vector3(P.hx + u.x * 0.55 * away, P.hy + u.y * 0.55 * away, 0.36 * away);
+    const pose = framed(eye, pts, aspect, 34, 62);
+    return { pot, from, pose, push: closer(pose, pts, aspect, 0.12, 34, 64), dir: u.clone().negate(), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
+  });
+  // Close together (under 0.7 s): one camera for both, the one for the ball that matters more.
+  const kept: Down[] = [];
+  for (const d of downs.sort((a, b) => a.from - b.from)) {
+    const prev = kept[kept.length - 1];
+    if (prev && d.from < prev.from + 0.7) {
+      if (d.weight > prev.weight) kept[kept.length - 1] = { ...d, from: prev.from };
+    } else kept.push(d);
+  }
+
+  // The opening: the cue ball, the ball it hits and where they meet, filmed from the far side of the table a
+  // little off the line (the cue ball comes toward us), or from the shooter's side well off it. Not from where
+  // the first pocket camera stands (a cut there would hardly change the picture), not cramped, not far.
+  const c0 = at(0, 0);
+  const d = new THREE.Vector2(shot.dx, shot.dy).normalize();
+  const shotPts = first
+    ? [c0, at(0, first.t), at(first.a === 0 ? first.b : first.a, 0)]
+    : [c0, at(0, Math.min(1, tFirst + 1))];
   const tanTilt = tilt / Math.sqrt(1 - tilt * tilt);
-  let h = clamp(0.16 + 0.16 * back, 0.24, 0.5);
-  if (back < 1.6) h = Math.max(h, R + back * tanTilt + 0.12);
-  const cue = v3(c.x, c.y, R);
-  const hitId = firstHit ? (firstHit.a === 0 ? firstHit.b : firstHit.a) : -1;
-  const target = hitId >= 0 ? v3(before[hitId].x, before[hitId].y, R) : v3(c.x + d.x * 0.8, c.y + d.y * 0.8, R);
-  const strokeAt = (k: number) => v3(c.x - d.x * k + n.x * 0.04, c.y - d.y * k + n.y * 0.04, h);
-  const stroke = framed(strokeAt(back), [cue, target], aspect, 24, 55);
-  const strokeIn = framed(strokeAt(back * 0.88), [cue, target], aspect, 24, 58);
+  const firstDown = kept[0];
+  let best: { pose: Pose; score: number } | null = null;
+  for (const [deg, behind] of [[25, false], [-25, false], [40, false], [-40, false], [150, true], [-150, true]] as const) {
+    const w = rotate(d, deg); // from the cue ball toward the camera
+    const D = toEdge(c0.x, c0.y, w.x, w.y) + 0.3;
+    let h = clamp(0.22 + 0.2 * D, 0.3, 0.6);
+    // On the shooter's side the cue rises toward the camera: stay above it.
+    if (behind) h = Math.max(h, R + Math.min(D, 1.6) * 0.87 * tanTilt + 0.12);
+    const pose = framed(new THREE.Vector3(c0.x + w.x * D, c0.y + w.y * D, h), shotPts, aspect, 26, 60);
+    const look = new THREE.Vector2(-w.x, -w.y);
+    let score = Math.abs(D - 1.1) + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0) + Math.max(0, pose.fov - 50) * 0.05;
+    if (firstDown && angle(look, firstDown.dir) < THREE.MathUtils.degToRad(40)) score += 0.8;
+    if (!best || score < best.score) best = { pose, score };
+  }
+  const opening = best!.pose;
 
-  // The pot: beyond the pocket, looking back along the ball's last roll, holding the pocket, where the ball
-  // started, and some of the table toward its middle.
-  const P = TABLE.pockets[pot.pocket];
-  const u = new THREE.Vector2(pot.vx, pot.vy);
-  if (u.lengthSq() < 1e-8) u.set(P.ux, P.uy);
-  u.normalize();
-  const hole = v3(P.hx, P.hy, 0), start = v3(before[pot.a].x, before[pot.a].y, R);
-  const toward = v3(P.hx * 0.65, P.hy * 0.65, 0);
-  // Further back on a phone held upright, or the pocket fills the picture.
-  const away = aspect < 1 ? 1.45 : 1;
-  const pocketAt = (k: number, z: number) => v3(P.hx + u.x * k * away, P.hy + u.y * k * away, z * away);
-  const pocket = framed(pocketAt(0.55, 0.36), [hole, start, toward], aspect, 34, 60);
-  const pocketIn = framed(pocketAt(0.47, 0.33), [hole, start, toward], aspect, 34, 62);
+  const beats: Beat[] = [{ from: 0, pose: opening, push: closer(opening, shotPts, aspect, 0.1, 26, 62), cut: true }];
+  for (const k of kept) beats.push({ from: k.from, pose: k.pose, push: k.push, cut: true });
 
-  // The cut: as the ball is hit, but at least 0.45 s before it drops (so a ball near the pocket is seen being
-  // struck from there), and not in the first quarter second (the stroke is seen from behind).
-  const hit = events.find((e) => e.type === "ball" && (e.a === pot.a || e.b === pot.a));
-  const cut = Math.max(0.25, Math.min((hit?.t ?? pot.t) + 0.03, pot.t - 0.45));
-  const opening: [number, number] = [0, (first?.t ?? 0) + 0.35];
-  const drop: [number, number] = [Math.max(cut - 0.2, pot.t - 0.7), pot.t + 0.35];
-  const slow: Array<[number, number]> = drop[0] <= opening[1] + 0.6 ? [[0, drop[1]]] : [opening, drop];
-  return { stroke, strokeIn, pocket, pocketIn, cut, pot: pot.t, slow, cutDone: false, rising: false };
+  // Slow motion: the stroke and first contact; round each ball going down. Stretches close together join.
+  const spans: Array<[number, number]> = [[0, tFirst + 0.35], ...kept.map((k): [number, number] => [k.from - 0.1, k.pot.t + 0.35])];
+  const slow: Array<[number, number]> = [];
+  for (const s of spans.sort((a, b) => a[0] - b[0])) {
+    const last = slow[slow.length - 1];
+    if (last && s[0] <= last[1] + 0.6) last[1] = Math.max(last[1], s[1]);
+    else slow.push([s[0], s[1]]);
+  }
+  const lastDown = Math.max(...kept.map((k) => k.pot.t));
+  return { beats, next: 1, slow, riseAt: lastDown + 0.35, rising: false };
 }
 
 /** Pace at simulated time t: `slowRate` in the slow stretches, easing to normal speed between them. */

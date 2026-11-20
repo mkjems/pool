@@ -1122,12 +1122,12 @@ function startReplay(low = false) {
   const p = lastPlayed!;
   sound.unlock();
   const cine = low
-    ? planCine(p.before, p.shot, p.shot.tilt ?? cueTilt(p.before, p.shot.dx, p.shot.dy, p.shot.side, p.shot.height), p.events, view.camera.aspect)
+    ? planCine(p.before, p.shot, p.shot.tilt ?? cueTilt(p.before, p.shot.dx, p.shot.dy, p.shot.side, p.shot.height), view.camera.aspect)
     : null;
   replaying = { p, from: state, phase: "lead", t: 0, rate: REPLAY_SLOW, slowUntil: slowPart(p.events), after: ballViews.map((v) => v.mesh.quaternion.clone()), cine };
   if (cine) {
-    director.cut(cine.stroke);
-    director.glide(cine.strokeIn, 2.2);
+    director.cut(cine.beats[0].pose);
+    director.glide(cine.beats[0].push, 3);
     document.body.classList.add("cinema");
   }
   state = "replay";
@@ -1179,13 +1179,14 @@ function runReplay(dt: number) {
     if (c) {
       r.rate = cineRate(c, t, REPLAY_SLOW);
       showSlowness(r.rate);
-      if (!c.cutDone && t >= c.cut) {
-        c.cutDone = true;
-        director.cut(c.pocket);
-        director.glide(c.pocketIn, (c.pot - t) / REPLAY_SLOW + 1.5);
+      // The next camera, when its moment comes.
+      while (c.next < c.beats.length && t >= c.beats[c.next].from) {
+        const b = c.beats[c.next++];
+        if (b.cut) director.cut(b.pose);
+        director.glide(b.push, 3);
       }
-      // The ball is down: up into the top view while the others roll out at normal speed.
-      if (!c.rising && t > c.slow[c.slow.length - 1][1]) { c.rising = true; director.home(2.6); }
+      // The last ball is down: up into the top view while the others roll out at normal speed.
+      if (!c.rising && t > c.riseAt) { c.rising = true; director.home(2.6); }
     } else if (t > r.slowUntil && r.rate < 1) {
       // Past the part that matters: back to normal speed over half a second, for the balls rolling out.
       r.rate = Math.min(1, r.rate + dt * 1.3);
@@ -1356,6 +1357,8 @@ if (new URLSearchParams(location.search).has("test")) {
     timeScale: (k: number) => { timeScale = k; },
     replay: (low = false) => startReplay(low),
     replayPhase: () => replaying?.phase ?? null,
+    /** The low replay's plan: when each camera comes, the slow stretches, the rise. */
+    cine: () => replaying?.cine ? { beats: replaying.cine.beats.map((b) => b.from), slow: replaying.cine.slow, riseAt: replaying.cine.riseAt } : null,
     /** The camera is away from the top view (the director has it). */
     camAway: () => director.active,
     /** Put the camera somewhere (table coordinates), or back home with no arguments. */

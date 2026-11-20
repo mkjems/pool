@@ -12,7 +12,8 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 **Pick up here (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
 not pushed: the camera director, lamps, and the winning shot replayed from low. The user saw the first version
-and set the rule for every camera: outside the table, looking in at the action (see step 2). Ask how it looks
+and set the rules: cameras outside the table looking in, never first person, cuts for every collision that
+matters and every ball going down (see step 2). Ask how it looks
 (win a game, or with `?test` pot any ball and run `__pool.replay(true)` in the console). Next: step 3, the
 cinematic break. Waiting (the user, 21 November): maybe a stronger look for slow motion, such as a colour
 filter; not yet. The intermittent `npm run browser` failure is "friend match: join by code ...": Chrome's
@@ -697,18 +698,23 @@ to make clips for spreading the word). Four steps:
     coordinates). The top view is `view.home`, worked out by `resize`; while `view.free` the director has the
     camera. Up turns smoothly from the cloth's up to the top view's, so the rise turns the table into place.
   - The winning shot (the 8 down, the shooter wins, any mode): 0.7 s after the last ball stops, the card is set
-    up behind it and `startReplay(true)` plays; the script is `src/render/cinema.ts`. **Rule (the user, 21
-    November): every camera stands outside the table and looks in at the action**; a camera inside the table
-    filming out at a cushion or a lone pocket tells nothing. Cuts are good. So: the stroke from beyond the rail
-    behind the cue ball (back along the shot until past the cushions, +0.28 m), higher the further back and
-    above a raised cue, framed (`framed`: turned and zoomed to hold given points, for the screen's shape) on the
-    cue ball and the ball it hits, easing closer. Cut to beyond the pocket (0.55 m, 0.36 m up; further back on
-    a phone held upright), looking back along the ball's last roll, framed on the pocket, where the ball
-    started and a point toward the table's middle. The cut comes at the hit but at least 0.45 s before the drop
-    and not in the first 0.25 s, so a ball near the pocket is seen being struck. Up into the top view (2.6 s)
-    0.35 s after the drop while the rest roll out; then the card. Pace by simulated time (`cineRate`): slow
-    for the stroke and first contact and from 0.7 s before the drop; normal speed between them when the 8 has
-    far to roll. About 9 s in all. A click skips it, camera straight home. `body.cinema` fades out the bar,
+    up behind it and `startReplay(true)` plays; the script is `src/render/cinema.ts`. **The user's rules (21
+    November):** every camera stands outside the table and looks in at the action (a camera inside the table
+    filming out at a cushion or a lone pocket tells nothing); never first person along the cue: the opening
+    films the shooter from the far side, a little off the line, or from the shooter's side well off it (third
+    person); cut so every collision that matters and every ball going down is seen.
+  - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
+    the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
+    distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
+    the cut changes the picture), framed (`framed`: turned and zoomed to hold given points, for the screen's
+    shape) on the cue ball, the ball it hits and where they meet. Then one beat per ball going down: from
+    beyond its pocket, looking back along its last roll (it comes toward us), from 0.3 s before the collision
+    that sent it (just after the first contact if that was it; at least 0.45 s before the drop), framed on
+    that collision, the ball, the pocket and part of the table. Beats under 0.7 s apart merge (the 8 wins).
+    Each camera eases a little closer while it is on. Up into the top view (2.6 s) 0.35 s after the last
+    drop; then the card. Slow motion (`cineRate`, by simulated time) for the stroke and first contact and
+    round each beat; normal speed between. `__pool.replay(true)` replays any shot with a pot this way;
+    `__pool.cine()` shows the plan. A click skips it, camera straight home. `body.cinema` fades out the bar,
     score, power, spin and labels; the badge moves to the top (the dark room).
   - Lamps (`src/render/lamps.ts`): three dark green shades on a bar, bright diffusers, rods up into the dark,
     fading out as the camera rises from 0.55 to 0.85 m (from the top view they would stand in front of the cloth).
