@@ -1,6 +1,6 @@
 // The lamps over the table: three shades on a bar, hung from the dark ceiling. Only seen from a low camera (a
-// replay's); from the top view they would stand between the camera and the cloth, so they fade out as the camera
-// rises past them.
+// replay's, at most 0.85 m up); from the top view they would stand between the camera and the cloth, so they
+// fade out as the camera rises past them.
 
 import * as THREE from "three";
 import { LAMPS } from "./table";
@@ -76,7 +76,7 @@ export class LampView {
   }
 
   /** Shown fully with the camera below `low` (metres above the cloth), gone above `high`. */
-  update(cameraZ: number, low = 0.55, high = 0.85) {
+  update(cameraZ: number, low = 0.9, high = 1.25) {
     const k = Math.max(0, Math.min(1, (high - cameraZ) / (high - low)));
     this.group.visible = k > 0;
     for (const m of this.mats) {

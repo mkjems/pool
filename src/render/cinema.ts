@@ -4,6 +4,9 @@
 // - Never first person (along the cue). The opening films the shooter from the far side of the table, a little
 //   off the line, or from the shooter's side but well off the line: third person.
 // - Cuts are good: cut so that every collision that matters and every ball going down is seen.
+// - A replay tells what happened, so it stays wide: the opening is an establishing shot holding every ball and
+//   pocket that matters, and the cuts hold the collision, the ball's path and the pocket. Close-ups belong to a
+//   montage (the cinematic break), not here.
 //
 // The shot is played once ahead (the physics is deterministic) to know where each ball is when.
 
@@ -38,6 +41,9 @@ function toEdge(x: number, y: number, wx: number, wy: number) {
   return Math.max(0, t);
 }
 
+/** A phone held upright may open wider: what it holds is mostly side by side. */
+const widen = (fov: number, aspect: number) => (aspect < 1 ? Math.min(85, fov / Math.sqrt(aspect)) : fov);
+
 /** A camera at `eye` turned to hold every point, with a little room round them; the field of view is vertical. */
 export function framed(eye: THREE.Vector3, points: THREE.Vector3[], aspect: number, minFov: number, maxFov: number): Pose {
   const f = new THREE.Vector3();
@@ -50,10 +56,25 @@ export function framed(eye: THREE.Vector3, points: THREE.Vector3[], aspect: numb
     const v = p.clone().sub(eye), ahead = Math.max(0.05, v.dot(f));
     need = Math.max(need, Math.abs(v.dot(up)) / ahead, Math.abs(v.dot(right)) / ahead / aspect);
   }
-  // A phone held upright may open wider: what it holds is mostly side by side.
-  const widest = aspect < 1 ? Math.min(85, maxFov / Math.sqrt(aspect)) : maxFov;
+  const widest = widen(maxFov, aspect);
   const fov = clamp(THREE.MathUtils.radToDeg(2 * Math.atan(need * 1.15 + 0.03)), minFov, widest);
   return { eye: eye.clone(), look: eye.clone().add(f), up: new THREE.Vector3(0, 0, 1), fov, shiftX: 0, shiftY: 0 };
+}
+
+/**
+ * A wide shot of `points` from the side `w` points to (unit, from them toward the camera): outside the table,
+ * at least `minD` from their middle and backed away until they all fit in `maxFov`, looking down at about `elev`
+ * degrees.
+ */
+function establish(w: THREE.Vector2, points: THREE.Vector3[], aspect: number, minFov: number, maxFov: number, elev = 25, minD = 0.9) {
+  const cx = points.reduce((s, p) => s + p.x, 0) / points.length, cy = points.reduce((s, p) => s + p.y, 0) / points.length;
+  const tan = Math.tan(THREE.MathUtils.degToRad(elev));
+  let D = Math.max(minD, toEdge(cx, cy, w.x, w.y) + 0.3), pose: Pose;
+  for (;; D += 0.1) {
+    pose = framed(new THREE.Vector3(cx + w.x * D, cy + w.y * D, clamp(D * tan, 0.4, 0.85)), points, aspect, minFov, 120);
+    if (pose.fov <= widen(maxFov, aspect) || D > 4) break;
+  }
+  return { pose: framed(pose.eye, points, aspect, minFov, maxFov), D };
 }
 
 /** The same camera a little closer to what it looks at, framed on the same points: to ease toward. */
@@ -102,7 +123,6 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
   // Each ball going down: from beyond its pocket, looking back along its last roll (it comes toward us), from
   // before the collision that sent it there, holding that collision, its path and the pocket.
   type Down = { pot: Pot; from: number; pose: Pose; push: Pose; dir: THREE.Vector2; weight: number };
-  const away = aspect < 1 ? 1.45 : 1; // further back on a phone held upright, or the pocket fills the picture
   const downs: Down[] = pots.map((pot) => {
     const P = TABLE.pockets[pot.pocket];
     const u = new THREE.Vector2(pot.vx, pot.vy);
@@ -111,11 +131,10 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
     const hit = hits.filter((e) => (e.a === pot.a || e.b === pot.a) && e.t < pot.t).pop();
     let from = !hit ? pot.t - 0.6 : hit === first ? tFirst + 0.12 : hit.t - 0.3;
     from = Math.max(0.3, Math.min(from, pot.t - 0.45));
-    const pts = [new THREE.Vector3(P.hx, P.hy, 0), at(pot.a, from), new THREE.Vector3(P.hx * 0.65, P.hy * 0.65, 0)];
+    const pts = [new THREE.Vector3(P.hx, P.hy, 0), at(pot.a, from), at(0, from), new THREE.Vector3(P.hx * 0.6, P.hy * 0.6, 0)];
     if (hit && hit.t >= from - 0.05) pts.push(at(hit.a, hit.t), at(hit.b, hit.t));
-    const eye = new THREE.Vector3(P.hx + u.x * 0.55 * away, P.hy + u.y * 0.55 * away, 0.36 * away);
-    const pose = framed(eye, pts, aspect, 34, 62);
-    return { pot, from, pose, push: closer(pose, pts, aspect, 0.12, 34, 64), dir: u.clone().negate(), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
+    const { pose } = establish(u, pts, aspect, 46, 56, 28, 1.1);
+    return { pot, from, pose, push: closer(pose, pts, aspect, 0.04, 46, 57), dir: u.clone().negate(), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
   });
   // Close together (under 0.7 s): one camera for both, the one for the ball that matters more.
   const kept: Down[] = [];
@@ -131,27 +150,33 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
   // the first pocket camera stands (a cut there would hardly change the picture), not cramped, not far.
   const c0 = at(0, 0);
   const d = new THREE.Vector2(shot.dx, shot.dy).normalize();
+  // The actors: the cue ball, the ball it hits and where they meet, every ball that goes down and its pocket.
   const shotPts = first
     ? [c0, at(0, first.t), at(first.a === 0 ? first.b : first.a, 0)]
     : [c0, at(0, Math.min(1, tFirst + 1))];
+  for (const pot of pots) {
+    if (pot.a === 0) continue;
+    const P = TABLE.pockets[pot.pocket];
+    shotPts.push(at(pot.a, 0), new THREE.Vector3(P.hx, P.hy, 0));
+  }
   const tanTilt = tilt / Math.sqrt(1 - tilt * tilt);
   const firstDown = kept[0];
   let best: { pose: Pose; score: number } | null = null;
   for (const [deg, behind] of [[25, false], [-25, false], [40, false], [-40, false], [150, true], [-150, true]] as const) {
     const w = rotate(d, deg); // from the cue ball toward the camera
-    const D = toEdge(c0.x, c0.y, w.x, w.y) + 0.3;
-    let h = clamp(0.22 + 0.2 * D, 0.3, 0.6);
+    let { pose, D } = establish(w, shotPts, aspect, 40, 55);
     // On the shooter's side the cue rises toward the camera: stay above it.
-    if (behind) h = Math.max(h, R + Math.min(D, 1.6) * 0.87 * tanTilt + 0.12);
-    const pose = framed(new THREE.Vector3(c0.x + w.x * D, c0.y + w.y * D, h), shotPts, aspect, 26, 60);
+    const cueTop = R + Math.min(pose.eye.distanceTo(c0), 1.6) * 0.87 * tanTilt + 0.12;
+    if (behind && pose.eye.z < cueTop) pose = framed(new THREE.Vector3(pose.eye.x, pose.eye.y, cueTop), shotPts, aspect, 40, 55);
     const look = new THREE.Vector2(-w.x, -w.y);
-    let score = Math.abs(D - 1.1) + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0) + Math.max(0, pose.fov - 50) * 0.05;
+    // Near enough to read the balls; the far side preferred (the cue ball comes toward us).
+    let score = Math.max(0, D - 1.3) * 0.6 + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0) + (pose.eye.z > 1 ? 1 : 0);
     if (firstDown && angle(look, firstDown.dir) < THREE.MathUtils.degToRad(40)) score += 0.8;
     if (!best || score < best.score) best = { pose, score };
   }
   const opening = best!.pose;
 
-  const beats: Beat[] = [{ from: 0, pose: opening, push: closer(opening, shotPts, aspect, 0.1, 26, 62), cut: true }];
+  const beats: Beat[] = [{ from: 0, pose: opening, push: closer(opening, shotPts, aspect, 0.04, 40, 56), cut: true }];
   for (const k of kept) beats.push({ from: k.from, pose: k.pose, push: k.push, cut: true });
 
   // Slow motion: the stroke and first contact; round each ball going down. Stretches close together join.

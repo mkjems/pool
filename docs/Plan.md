@@ -702,16 +702,21 @@ to make clips for spreading the word). Four steps:
     November):** every camera stands outside the table and looks in at the action (a camera inside the table
     filming out at a cushion or a lone pocket tells nothing); never first person along the cue: the opening
     films the shooter from the far side, a little off the line, or from the shooter's side well off it (third
-    person); cut so every collision that matters and every ball going down is seen.
+    person); cut so every collision that matters and every ball going down is seen. A replay tells what
+    happened, so it stays wide: the opening is an establishing shot holding every actor (cue ball, the ball it
+    hits, each ball that goes down and its pocket), and the cuts hold the collision, the ball's path and the
+    pocket. No close-ups in a replay; they belong to a montage (step 3, the cinematic break).
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
     the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
     distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
-    the cut changes the picture), framed (`framed`: turned and zoomed to hold given points, for the screen's
-    shape) on the cue ball, the ball it hits and where they meet. Then one beat per ball going down: from
-    beyond its pocket, looking back along its last roll (it comes toward us), from 0.3 s before the collision
-    that sent it (just after the first contact if that was it; at least 0.45 s before the drop), framed on
-    that collision, the ball, the pocket and part of the table. Beats under 0.7 s apart merge (the 8 wins).
-    Each camera eases a little closer while it is on. Up into the top view (2.6 s) 0.35 s after the last
+    the cut changes the picture). `establish`: from the actors' middle, out past the table along the chosen
+    side, then further back until a lens of at most 55° holds them all (`framed`: turned and zoomed for the
+    screen's shape), looking down about 25° (camera 0.4 to 0.85 m up). Then one beat per ball going down:
+    from beyond its pocket, looking back along its last roll (it comes toward us), from 0.3 s before the
+    collision that sent it (just after the first contact if that was it; at least 0.45 s before the drop),
+    holding that collision, the ball, the cue ball, the pocket and part of the table, at least 1.1 m away,
+    46° to 56°, 28° down. Beats under 0.7 s apart merge (the 8 wins).
+    Each camera drifts in very slightly (4%) while it is on. Lamps fade between 0.9 and 1.25 m camera height. Up into the top view (2.6 s) 0.35 s after the last
     drop; then the card. Slow motion (`cineRate`, by simulated time) for the stroke and first contact and
     round each beat; normal speed between. `__pool.replay(true)` replays any shot with a pot this way;
     `__pool.cine()` shows the plan. A click skips it, camera straight home. `body.cinema` fades out the bar,
