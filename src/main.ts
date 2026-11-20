@@ -1376,6 +1376,15 @@ if (new URLSearchParams(location.search).has("test")) {
     cine: () => replaying?.cine ? { beats: replaying.cine.beats.map((b) => b.from), slow: replaying.cine.slow, riseAt: replaying.cine.riseAt } : null,
     /** The camera is away from the top view (the director has it). */
     camAway: () => director.active,
+    /** Balls moving but off the screen while a camera-angles replay's camera is on (not during the rise). */
+    outOfShot: () => {
+      const c = replaying?.cine;
+      if (!c || c.rising || !sim || director.moving && c.next === 0) return [];
+      return sim.balls.filter((b) => b.on && Math.hypot(b.vx, b.vy) > 0.02).filter((b) => {
+        const q = view.toScreen(b.x, b.y);
+        return q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight;
+      }).map((b) => b.id);
+    },
     /** Where the camera is (table coordinates). */
     camera: () => ({ x: director.eye.x, y: director.eye.y, z: director.eye.z }),
     /** Put the camera somewhere (table coordinates), or back home with no arguments. */

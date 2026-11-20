@@ -29,8 +29,10 @@ async function open(opts = {}) {
   const page = await ctx.newPage();
   page.errors = [];
   page.on("pageerror", (e) => page.errors.push(e.message));
+  // Ignored: Chrome's autoplay warning when a friend's shot sounds in a page nobody has clicked yet (after a
+  // reload); browsers start sound at the next click, nothing to fix. It made a friend-match scenario fail 1 run in 6.
   page.on("console", (m) => {
-    if ((m.type() === "error" || m.type() === "warning") && !/WebSocket|GPU stall|GroupMarker/.test(m.text())) page.errors.push(m.text());
+    if ((m.type() === "error" || m.type() === "warning") && !/WebSocket|GPU stall|GroupMarker|AudioContext was not allowed to start/.test(m.text())) page.errors.push(m.text());
   });
   await page.goto(opts.url ?? base);
   await page.waitForFunction(() => window.__pool);
@@ -260,6 +262,23 @@ await scenario("replay with camera angles from the Replay menu, from the bottom 
   check(eyeBelow, "the camera stands on the bottom side of the table", JSON.stringify(await p.evaluate(() => window.__pool.camera())));
   await p.mouse.click(640, 400);
   check((await pool(p, () => window.__pool.state())) === "aim" && !(await pool(p, () => window.__pool.camAway())), "skipped: back in the top view");
+});
+
+await scenario("camera angles never leave a moving ball out of the shot (two breaks, frame by frame)", async (open) => {
+  const p = await open();
+  await p.click("[data-mode=practice]");
+  for (const seed of [2, 4]) { // both lost balls out of the shot before the rule
+    await pool(p, (seed) => { window.__pool.timeScale(1); window.__pool.rack(seed); window.__pool.aimAt(0.5, 0.01); window.__pool.shoot(1); }, seed);
+    await played(p, 40000);
+    await pool(p, () => { window.__pool.replay(true); window.__pool.timeScale(0); });
+    const out = new Set();
+    for (let f = 0; f < 600 && (await pool(p, () => window.__pool.state())) === "replay"; f++) {
+      await pool(p, () => window.__pool.step(1 / 30));
+      await p.waitForTimeout(25);
+      for (const id of await pool(p, () => window.__pool.outOfShot())) out.add(id);
+    }
+    check(out.size === 0, `break ${seed}: every moving ball in the shot`, `out: ${[...out]}`);
+  }
 });
 
 await scenario("a foul gives the other player ball in hand", async (open) => {

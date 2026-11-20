@@ -4,6 +4,7 @@
 // - Never first person (along the cue). The opening films the shooter from the far side of the table, a little
 //   off the line, or from the shooter's side but well off the line: third person.
 // - Cuts are good: cut so that every collision that matters and every ball going down is seen.
+// - Never a moving ball out of the shot: each camera holds the paths of every ball that moves while it is on.
 // - Every camera stays on the bottom side of the table as the top view shows it (where the player stands);
 //   flying round the table confuses.
 // - Long lenses from further back (about 30°), not wide ones up close: a wide lens near the table stretches it
@@ -101,7 +102,8 @@ function track(before: readonly Ball[], shot: Shot) {
   const sim = new Sim(before);
   sim.strike(shot);
   const frames: Float64Array[] = [];
-  const snap = () => frames.push(Float64Array.from(sim.balls.flatMap((b) => [b.x, b.y])));
+  // A ball off the table (potted) is NaN.
+  const snap = () => frames.push(Float64Array.from(sim.balls.flatMap((b) => (b.on ? [b.x, b.y] : [NaN, NaN]))));
   snap();
   for (let i = 1; sim.moving() && sim.t < 30; i++) {
     sim.step();
@@ -112,11 +114,30 @@ function track(before: readonly Ball[], shot: Shot) {
     events: sim.events,
     /** When everything is still. */
     end: sim.t,
-    at(id: number, t: number) {
-      const f = frames[clamp(Math.round(t / 0.01), 0, frames.length - 1)];
-      return new THREE.Vector3(f[id * 2], f[id * 2 + 1], R);
+    at,
+    /** Every ball that moves between t0 and t1: where it is along the way (every 0.1 s, while on the table). */
+    moving(t0: number, t1: number) {
+      const out: THREE.Vector3[] = [];
+      for (let id = 0; id < before.length; id++) {
+        const path: THREE.Vector3[] = [];
+        let moved = false;
+        for (let t = t0; ; t = Math.min(t1, t + 0.1)) {
+          const p = at(id, t);
+          if (!Number.isNaN(p.x)) {
+            if (path.length && p.distanceTo(path[path.length - 1]) > 0.002) moved = true;
+            path.push(p);
+          }
+          if (t >= t1) break;
+        }
+        if (moved) out.push(...path);
+      }
+      return out;
     },
   };
+  function at(id: number, t: number) {
+    const f = frames[clamp(Math.round(t / 0.01), 0, frames.length - 1)];
+    return new THREE.Vector3(f[id * 2], f[id * 2 + 1], R);
+  }
 }
 
 const angle = (a: THREE.Vector2, b: THREE.Vector2) => Math.acos(clamp(a.dot(b) / (a.length() * b.length() || 1), -1, 1));
@@ -132,7 +153,7 @@ const SIDES = [0, -15, 15, -30, 30, -45, 45];
  * only tilts up.
  */
 export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspect: number, down: THREE.Vector2): Cine {
-  const { events, at, end } = track(before, shot);
+  const { events, at, end, moving } = track(before, shot);
   const pots = events.filter((e) => e.type === "pocket") as Pot[];
   const hits = events.filter((e) => e.type === "ball") as Hit[];
   const first = hits.find((e) => e.a === 0 || e.b === 0);
@@ -140,7 +161,7 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
 
   // Each ball going down: from the bottom side, the way most along its last roll (it comes toward us when it
   // can), from before the collision that sent it there, holding that collision, its path and the pocket.
-  type Down = { pot: Pot; from: number; pose: Pose; push: Pose; weight: number };
+  type Down = { pot: Pot; from: number; pts: THREE.Vector3[]; w: THREE.Vector2; weight: number };
   const downs: Down[] = pots.map((pot) => {
     const P = TABLE.pockets[pot.pocket];
     const u = new THREE.Vector2(pot.vx, pot.vy);
@@ -156,8 +177,7 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
       const c = rotate(down, deg), score = -0.5 * c.dot(u) + Math.abs(deg) * 0.006;
       if (score < best) { best = score; w = c; }
     }
-    const { pose } = establish(w, pts, aspect, 28, 36, 32, 1.6);
-    return { pot, from, pose, push: closer(pose, pts, aspect, 0.03, 28, 37), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
+    return { pot, from, pts, w, weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
   });
   // Close together (under 0.7 s): one camera for both, the one for the ball that matters more.
   const kept: Down[] = [];
@@ -167,6 +187,13 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
       if (d.weight > prev.weight) kept[kept.length - 1] = { ...d, from: prev.from };
     } else kept.push(d);
   }
+
+  // Up into the top view after the last ball down; with none, once the first contact has played out.
+  const riseAt = kept.length
+    ? Math.max(...kept.map((k) => k.pot.t)) + 0.35
+    : Math.min(Math.max(tFirst + 1.5, 1.2), Math.max(1.2, end - 0.3));
+  // Each camera is on until the next one (the last until the rise): it holds every ball moving meanwhile.
+  const until = (i: number) => (i + 1 < kept.length ? kept[i + 1].from : riseAt);
 
   // The opening, an establishing shot from the bottom side: the cue ball, the ball it hits and where they meet,
   // every ball that goes down and its pocket, and the table's wood near and far. Third person: never looking
@@ -181,6 +208,7 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
     const P = TABLE.pockets[pot.pocket];
     shotPts.push(at(pot.a, 0), new THREE.Vector3(P.hx, P.hy, 0));
   }
+  shotPts.push(...moving(0, kept.length ? kept[0].from : riseAt));
   const tanTilt = tilt / Math.sqrt(1 - tilt * tilt);
   let best: { pose: Pose; score: number; points: THREE.Vector3[] } | null = null;
   for (const deg of SIDES) {
@@ -198,8 +226,11 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
   }
   const opening = best!.pose;
 
-  const beats: Beat[] = [{ from: 0, pose: opening, push: framed(opening.eye.clone().lerp(new THREE.Vector3(0, 0, opening.eye.z), 0.02), best!.points, aspect, 24, 33), cut: true }];
-  for (const k of kept) {
+  const beats: Beat[] = [{ from: 0, pose: opening, push: framed(opening.eye.clone().lerp(new THREE.Vector3(0, 0, opening.eye.z), 0.02), best!.points, aspect, 24, 36), cut: true }];
+  for (const [i, kd] of kept.entries()) {
+    const pts = [...kd.pts, ...moving(kd.from, until(i))];
+    const { pose } = establish(kd.w, pts, aspect, 28, 36, 32, 1.6);
+    const k = { from: kd.from, pose, push: closer(pose, pts, aspect, 0.03, 28, 40) };
     // Hardly a different picture: glide over rather than cut (a jump cut).
     const prev = beats[beats.length - 1].pose;
     const same = prev.eye.distanceTo(k.pose.eye) < 0.6 &&
@@ -215,10 +246,6 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
     if (last && s[0] <= last[1] + 0.6) last[1] = Math.max(last[1], s[1]);
     else slow.push([s[0], s[1]]);
   }
-  // Up into the top view after the last ball down; with none, once the first contact has played out.
-  const riseAt = kept.length
-    ? Math.max(...kept.map((k) => k.pot.t)) + 0.35
-    : Math.min(Math.max(tFirst + 1.5, 1.2), Math.max(1.2, end - 0.3));
   return { beats, next: 1, slow, riseAt, rising: false };
 }
 
