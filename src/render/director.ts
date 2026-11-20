@@ -28,8 +28,8 @@ export class Director {
   /** The camera is away from the top view (or on its way back). */
   get active() { return this.view.free; }
 
-  /** Height of the camera above the cloth now. */
-  get height() { return this.view.free ? this.now.eye.z : this.view.home.eye.z; }
+  /** Where the camera is now (table coordinates). */
+  get eye() { return this.view.free ? this.now.eye : this.view.home.eye; }
 
   /** Straight to a placement. */
   cut(p: Pose) {

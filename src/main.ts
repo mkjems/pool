@@ -1334,7 +1334,7 @@ function frame(now: number) {
   }
 
   director.update(dt);
-  lamps.update(director.height);
+  lamps.update(director.eye);
   view.renderer.render(view.scene, view.camera);
   requestAnimationFrame(frame);
 }

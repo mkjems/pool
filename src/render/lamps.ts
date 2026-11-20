@@ -1,6 +1,6 @@
-// The lamps over the table: three shades on a bar, hung from the dark ceiling. Only seen from a low camera (a
-// replay's, at most 0.85 m up); from the top view they would stand between the camera and the cloth, so they
-// fade out as the camera rises past them.
+// The lamps over the table: three shades on a bar, hung from the dark ceiling. Only seen in a replay's views from
+// the side; from the top view they would stand between the camera and the cloth, so they fade out as the camera
+// comes to look down steeply.
 
 import * as THREE from "three";
 import { LAMPS } from "./table";
@@ -75,9 +75,13 @@ export class LampView {
     parent.add(this.group);
   }
 
-  /** Shown fully with the camera below `low` (metres above the cloth), gone above `high`. */
-  update(cameraZ: number, low = 0.9, high = 1.25) {
-    const k = Math.max(0, Math.min(1, (high - cameraZ) / (high - low)));
+  /**
+   * Shown while the camera looks at the table from the side; fading out as it looks down more steeply than
+   * `low` degrees (from the middle of the table), gone past `high`: from above they would hide the cloth.
+   */
+  update(eye: THREE.Vector3, low = 38, high = 50) {
+    const steep = THREE.MathUtils.radToDeg(Math.atan2(eye.z, Math.hypot(eye.x, eye.y)));
+    const k = Math.max(0, Math.min(1, (high - steep) / (high - low)));
     this.group.visible = k > 0;
     for (const m of this.mats) {
       m.opacity = k;

@@ -4,6 +4,8 @@
 // - Never first person (along the cue). The opening films the shooter from the far side of the table, a little
 //   off the line, or from the shooter's side but well off the line: third person.
 // - Cuts are good: cut so that every collision that matters and every ball going down is seen.
+// - Long lenses from further back (about 30°), not wide ones up close: a wide lens near the table stretches it
+//   (the near rail huge, the far end tiny). The action may sit off the middle of the picture for that.
 // - A replay tells what happened, so it stays wide: the opening is an establishing shot holding every ball and
 //   pocket that matters, and the cuts hold the collision, the ball's path and the pocket. Close-ups belong to a
 //   montage (the cinematic break), not here.
@@ -79,8 +81,8 @@ function establish(w: THREE.Vector2, actors: THREE.Vector3[], aspect: number, mi
   const tan = Math.tan(THREE.MathUtils.degToRad(elev));
   let D = Math.max(minD, toEdge(cx, cy, w.x, w.y) + 0.3), pose: Pose;
   for (;; D += 0.1) {
-    pose = framed(new THREE.Vector3(cx + w.x * D, cy + w.y * D, clamp(D * tan, 0.4, 0.85)), points, aspect, minFov, 120);
-    if (pose.fov <= widen(maxFov, aspect) || D > 4) break;
+    pose = framed(new THREE.Vector3(cx + w.x * D, cy + w.y * D, clamp(D * tan, 0.4, 2.6)), points, aspect, minFov, 120);
+    if (pose.fov <= widen(maxFov, aspect) || D > 8) break;
   }
   return { pose: framed(pose.eye, points, aspect, minFov, maxFov), D, points };
 }
@@ -141,8 +143,8 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
     from = Math.max(0.3, Math.min(from, pot.t - 0.45));
     const pts = [new THREE.Vector3(P.hx, P.hy, 0), at(pot.a, from), at(0, from), new THREE.Vector3(P.hx * 0.6, P.hy * 0.6, 0)];
     if (hit && hit.t >= from - 0.05) pts.push(at(hit.a, hit.t), at(hit.b, hit.t));
-    const { pose } = establish(u, pts, aspect, 46, 56, 28, 1.1);
-    return { pot, from, pose, push: closer(pose, pts, aspect, 0.04, 46, 57), dir: u.clone().negate(), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
+    const { pose } = establish(u, pts, aspect, 28, 36, 28, 1.6);
+    return { pot, from, pose, push: closer(pose, pts, aspect, 0.03, 28, 37), dir: u.clone().negate(), weight: pot.a === 8 ? 3 : pot.a === 0 ? 1 : 2 };
   });
   // Close together (under 0.7 s): one camera for both, the one for the ball that matters more.
   const kept: Down[] = [];
@@ -172,21 +174,21 @@ export function planCine(before: readonly Ball[], shot: Shot, tilt: number, aspe
   let best: { pose: Pose; score: number; points: THREE.Vector3[] } | null = null;
   for (const [deg, behind] of [[25, false], [-25, false], [40, false], [-40, false], [150, true], [-150, true]] as const) {
     const w = rotate(d, deg); // from the cue ball toward the camera
-    const est = establish(w, shotPts, aspect, 40, 58, 25, 0.9, true);
+    const est = establish(w, shotPts, aspect, 24, 32, 25, 0.9, true);
     let pose = est.pose;
     const D = est.D;
     // On the shooter's side the cue rises toward the camera: stay above it.
     const cueTop = R + Math.min(pose.eye.distanceTo(c0), 1.6) * 0.87 * tanTilt + 0.12;
-    if (behind && pose.eye.z < cueTop) pose = framed(new THREE.Vector3(pose.eye.x, pose.eye.y, cueTop), est.points, aspect, 40, 58);
+    if (behind && pose.eye.z < cueTop) pose = framed(new THREE.Vector3(pose.eye.x, pose.eye.y, cueTop), est.points, aspect, 24, 34);
     const look = new THREE.Vector2(-w.x, -w.y);
     // Near enough to read the balls; the far side preferred (the cue ball comes toward us).
-    let score = Math.max(0, D - 1.3) * 0.6 + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0) + (pose.eye.z > 1 ? 1 : 0);
+    let score = Math.max(0, D - 3) * 0.3 + (behind ? 0.35 : 0) + (Math.abs(deg) === 40 ? 0.15 : 0);
     if (firstDown && angle(look, firstDown.dir) < THREE.MathUtils.degToRad(40)) score += 0.8;
     if (!best || score < best.score) best = { pose, score, points: est.points };
   }
   const opening = best!.pose;
 
-  const beats: Beat[] = [{ from: 0, pose: opening, push: framed(opening.eye.clone().lerp(new THREE.Vector3(0, 0, opening.eye.z), 0.02), best!.points, aspect, 40, 58), cut: true }];
+  const beats: Beat[] = [{ from: 0, pose: opening, push: framed(opening.eye.clone().lerp(new THREE.Vector3(0, 0, opening.eye.z), 0.02), best!.points, aspect, 24, 33), cut: true }];
   for (const k of kept) beats.push({ from: k.from, pose: k.pose, push: k.push, cut: true });
 
   // Slow motion: the stroke and first contact; round each ball going down. Stretches close together join.

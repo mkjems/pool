@@ -707,19 +707,21 @@ to make clips for spreading the word). Four steps:
     hits, each ball that goes down and its pocket), and the cuts hold the collision, the ball's path and the
     pocket. No close-ups in a replay; they belong to a montage (step 3, the cinematic break). The opening
     has the table's wooden edges, near and far, in the picture (no cloth running out of the frame at the
-    bottom or top).
+    bottom or top). No strong perspective (the user: avoid extreme 3D distortion of the table): long lenses
+    from further back, even if the action is not in the middle of the picture.
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
     the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
     distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
     the cut changes the picture). `establish`: from the actors' middle, out past the table along the chosen
-    side, then further back until a lens of at most 58° holds them all and the outer edges of the wood
+    side, then further back until a lens of at most 32° holds them all and the outer edges of the wood
     near and far along the line of sight (with 7 and 10 cm of room) (`framed`: turned and zoomed for the
-    screen's shape), looking down about 25° (camera 0.4 to 0.85 m up). Then one beat per ball going down:
+    screen's shape), looking down about 25° (camera up to 2.6 m up). Then one beat per ball going down:
     from beyond its pocket, looking back along its last roll (it comes toward us), from 0.3 s before the
     collision that sent it (just after the first contact if that was it; at least 0.45 s before the drop),
-    holding that collision, the ball, the cue ball, the pocket and part of the table, at least 1.1 m away,
-    46° to 56°, 28° down. Beats under 0.7 s apart merge (the 8 wins).
-    Each camera drifts in very slightly (4%) while it is on. Lamps fade between 0.9 and 1.25 m camera height. Up into the top view (2.6 s) 0.35 s after the last
+    holding that collision, the ball, the cue ball, the pocket and part of the table, at least 1.6 m away,
+    28° to 36°, 28° down. Beats under 0.7 s apart merge (the 8 wins).
+    Each camera drifts in very slightly while it is on. Lamps fade as the camera comes to look down at
+    the table steeper than 38° (gone at 50°), so they show in the replay and never block the top view. Up into the top view (2.6 s) 0.35 s after the last
     drop; then the card. Slow motion (`cineRate`, by simulated time) for the stroke and first contact and
     round each beat; normal speed between. `__pool.replay(true)` replays any shot with a pot this way;
     `__pool.cine()` shows the plan. A click skips it, camera straight home. `body.cinema` fades out the bar,
