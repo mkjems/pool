@@ -867,6 +867,11 @@ power$.addEventListener("pointerdown", (e) => {
 
 // Spin.
 const spinBtn = $("#spin"), spinPad = $("#spin-pad"), pad = $("#spin-pad .pad");
+
+// iOS Safari shows its text magnifier on a long press or a double-tap-and-hold, even with user-select off.
+// Cancelling the touch's default on the surfaces that are dragged stops it; pointer events still arrive.
+// (Not on buttons or their containers: that would also cancel their clicks.)
+for (const el of [canvas, power$, pad]) el.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 function updateSpinUI() {
   for (const dot of [spinBtn.querySelector<HTMLElement>(".dot")!, pad.querySelector<HTMLElement>(".dot")!]) {
     dot.style.left = `${50 + tip.side * 50}%`;
