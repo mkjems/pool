@@ -15,6 +15,12 @@ export const G = 9.81;
 export const TABLE_L = 1.981;
 export const TABLE_W = 0.9905;
 
+/** The cushions and the wooden rails around the cloth: width (nose to wood, then wood) and height above it. */
+export const CUSHION_W = 0.05;
+export const RAIL_W = 0.085;
+export const CUSHION_H = 0.038;
+export const WOOD_H = 0.046;
+
 /** Sliding friction, ball on cloth. */
 export const MU_SLIDE = 0.2;
 /** Rolling resistance, ball on cloth. */

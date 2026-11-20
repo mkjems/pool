@@ -2,13 +2,10 @@
 // that the scene turns upright.
 
 import * as THREE from "three";
-import { R, TABLE_L, TABLE_W } from "../sim/constants";
+import { CUSHION_H, CUSHION_W, R, RAIL_W, TABLE_L, TABLE_W, WOOD_H } from "../sim/constants";
 import { TABLE, type Segment } from "../sim/table";
 
-export const CUSHION_W = 0.05; // nose to wood
-export const RAIL_W = 0.085; // wood
-export const CUSHION_H = 0.038;
-export const WOOD_H = 0.046;
+export { CUSHION_H, CUSHION_W, RAIL_W, WOOD_H };
 /** Top of the leather lip round each pocket, just proud of the wood. */
 export const RIM_TOP = WOOD_H + 0.001;
 /** Width of that lip where it shows, between the hole and the wood. */

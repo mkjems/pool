@@ -4,6 +4,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { DT, G, MAX_SPEED, MAX_TIP, R, TABLE_L, TABLE_W } from "./sim/constants";
+import { cueTilt } from "./sim/cue";
 import { Sim, cloneBalls, fingerprint, type Ball, type Shot, type SimEvent } from "./sim/physics";
 import { ball, rack8, rng } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
@@ -417,7 +418,9 @@ function startGame(m: Mode, first: Player = 0, seed = (Math.random() * 1e9) | 0)
 function shoot(p: number) {
   if (state !== "aim" || p < 0.015 || watching()) return;
   if (ruled() && onEight(game, balls) && called === null) { toast("Tap a pocket to call the 8"); return; }
-  const shot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height };
+  // The tilt goes with the shot, so a friend's game plays it exactly as drawn here.
+  const shot = { dx: aim.x, dy: aim.y, speed: shotSpeed(p), side: tip.side, height: tip.height,
+    tilt: cueTilt(balls, aim.x, aim.y, tip.side, tip.height) };
   if (mode === "online") {
     // Sent before it is played, with the exact position and game it is played from.
     if (!link || link.status !== "open") { toast("Reconnecting. Shoot when you're back online."); return; }
@@ -1146,8 +1149,7 @@ function frame(now: number) {
     ? 0.03 + Math.max(0, 1 - strokeT / 0.07) * (0.02 + (pendingShot ? pendingShot.speed / MAX_SPEED : 0) * 0.25)
     : 0.03 + power * 0.25;
   const cueShown = (aiming || state === "stroke") && balls[0].on && !dragging;
-  cue.set(balls[0].x, balls[0].y, aim.x, aim.y, pull, tip.side, tip.height, cueShown,
-    cueShown ? balls.filter((b) => b.id !== 0 && b.on && b.air < 0) : []);
+  cue.set(balls, aim.x, aim.y, pull, tip.side, tip.height, cueShown);
 
   view.renderer.render(view.scene, view.camera);
   requestAnimationFrame(frame);

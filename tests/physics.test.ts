@@ -1,6 +1,7 @@
 // Reference shots: the physics must reproduce what is known about real pool.
 import { describe, expect, it } from "vitest";
-import { R, MASS } from "../src/sim/constants";
+import { R, MASS, TABLE_W } from "../src/sim/constants";
+import { MIN_TILT, cueTilt } from "../src/sim/cue";
 import { Sim, fingerprint, type Ball } from "../src/sim/physics";
 import { ball, rack8 } from "../src/sim/rack";
 import { TABLE, onSurface } from "../src/sim/table";
@@ -216,5 +217,63 @@ describe("the simulation as a whole", () => {
       return fingerprint(sim.balls);
     };
     expect(play()).toBe(play());
+  });
+});
+
+describe("the cue's tilt", () => {
+  const lone = () => [ball(0, -0.3, 0)];
+  const behind = (gap: number) => [ball(0, 0, 0), ball(1, -2 * R - gap, 0)];
+
+  it("on an open table the cue rests at a natural stance", () => {
+    expect(cueTilt(lone(), 1, 0, 0, 0)).toBe(MIN_TILT);
+  });
+
+  it("rises over a ball behind the cue ball, more the closer it is", () => {
+    const far = cueTilt(behind(0.2), 1, 0, 0, 0);
+    const near = cueTilt(behind(0.01), 1, 0, 0, 0);
+    const frozen = cueTilt(behind(0), 1, 0, 0, 0);
+    expect(far).toBeGreaterThan(MIN_TILT);
+    expect(near).toBeGreaterThan(far + 0.2);
+    expect(frozen).toBeGreaterThanOrEqual(near);
+    // A ball beside the line, clear of the cue, changes nothing.
+    expect(cueTilt([ball(0, 0, 0), ball(1, -0.1, 0.06)], 1, 0, 0, 0)).toBe(MIN_TILT);
+  });
+
+  it("rises over the rail when the cue ball is near it and the cue lies across it", () => {
+    const y = TABLE_W / 2 - R - 0.005;
+    expect(cueTilt([ball(0, 0, y)], 0, -1, 0, 0)).toBeGreaterThan(MIN_TILT + 0.05);
+    expect(cueTilt([ball(0, 0, y)], 0, 1, 0, 0)).toBe(MIN_TILT);
+  });
+
+  it("left out of the shot, it is the one the table asks for", () => {
+    const balls = behind(0.01);
+    const play = (tilt?: number) => {
+      const sim = new Sim(balls);
+      sim.strike({ dx: 1, dy: 0, speed: 2, side: 0.3, height: 0, tilt });
+      sim.run();
+      return fingerprint(sim.balls);
+    };
+    expect(play()).toBe(play(cueTilt(balls, 1, 0, 0.3, 0)));
+  });
+
+  it("a raised cue at the centre drives the ball into the cloth: slower, no spin", () => {
+    const sim = new Sim(lone());
+    sim.strike({ dx: 1, dy: 0, speed: 2, side: 0, height: 0, tilt: 0.6 });
+    const b = sim.balls[0];
+    expect(b.vx).toBeCloseTo(1.6, 12);
+    expect(Math.abs(b.wx) + Math.abs(b.wy) + Math.abs(b.wz)).toBe(0);
+  });
+
+  it("side spin on a raised cue curves the ball toward the side struck; on a level cue it runs straight", () => {
+    const turn = (tilt: number) => {
+      const sim = new Sim([ball(0, -0.8, 0)]);
+      sim.strike({ dx: 1, dy: 0, speed: 2, side: 0.4, height: 0, tilt });
+      const a0 = deg(sim.balls[0].vx, sim.balls[0].vy);
+      for (let i = 0; i < 200; i++) sim.step(); // half a second
+      return deg(sim.balls[0].vx, sim.balls[0].vy) - a0; // + is a turn to the left
+    };
+    expect(Math.abs(turn(0))).toBeLessThan(1e-6);
+    expect(turn(0.12)).toBeLessThan(-0.5); // a natural stance: a small swerve to the right
+    expect(turn(0.7)).toBeLessThan(turn(0.12) - 5); // massé: a real curve
   });
 });

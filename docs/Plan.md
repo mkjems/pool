@@ -56,16 +56,20 @@ front edge of each hole is round, never straight (the user: "that is not how poo
      where the axis enters the ball, tip offset measured across the cue), and the butt rises in 0.01 rad steps
      from 0.12 until the cue clears the rails and every ball on the cloth (`clears`), up to 1.2 rad (69°). A
      ball is checked against the cue as if the tip were at its struck position, so the cue does not sink
-     during the stroke. The physics is unchanged.
-   - [ ] Part 2, the physics. Move the "how high must the cue rise" calculation into `src/sim/` (only the
-     allowed maths), add the cue's tilt to `Shot` as numbers (not an angle), and let `strike()` work from the
-     cue's 3D direction: less speed (part of the hit goes into the cloth), and with side spin a swerve or
-     massé curve (sliding already follows a curve when the slip is sideways, `src/sim/physics.ts`). No jump
-     shots (balls would need height, flight and landing). A level cue must give bit-identical results, so the
-     200 reference shots stay; add reference shots with a raised cue. The computer simulates its shots, so it
-     follows on its own; friend matches send the tilt in the shot.
-     To decide with the user first: does the constant 7° lift count (every side-spin shot curves a little,
-     as in real pool), or only the lift above it? Later, maybe: raising the cue on purpose for massé.
+     during the stroke. (Part 2 moved the calculation into `src/sim/cue.ts`.)
+   - [x] Part 2, the physics (20 November; the user: let the 7° count). `src/sim/cue.ts` (pure):
+     `cueTilt` tries the sine of the cue's angle from 0.12 (7°) up in steps of 0.01 to 0.93 (68°) until the
+     cue, tip as it strikes, clears the rails and every ball; the rail sizes moved to `src/sim/constants.ts`.
+     `Shot.tilt` is that sine; left out, `strike()` works it out from the table, and 0 is a level cue. The
+     human's shot carries it, so a friend's game plays it as drawn; the computer leaves it out. `strike()`:
+     speed along the cloth × cos, the rest into the slate; spin = 5v/(2R)(side u + height (z × d)) with u the
+     cue's "up" across it, so side spin on a raised cue leans along the travel and the ball swerves. The tip
+     offset is measured across the cue (centre on a raised cue: no spin). The drawn cue uses the same
+     `cueTilt`/`cueAxis`. Sizes, cue ball sent 1.8 m with side 0.4: level 3 cm left (squirt), 7° 5 cm right,
+     30° 36 cm right, 44° curves into the side cushion. Ball behind the cue ball: 25 cm gap 8°, 3 cm 27°,
+     frozen 44°. The aim line shows the curve. Engines agree, selfplay unchanged (hard–medium 12–8, 159 ms).
+     No jump shots (balls would need height, flight and landing). Later, maybe: raising the cue on purpose for
+     massé, if the user asks.
 
 **What the user has said so far** (the game should keep these):
 - Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.

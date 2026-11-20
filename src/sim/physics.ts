@@ -8,6 +8,7 @@ import {
   DT, E_BALL, EPS_V, EPS_W, G, LIP_DROP, MAX_SPEED, MAX_TIP, MU_CUSHION, MU_ROLL, MU_SLIDE, POCKET_E,
   CUSHION_COS, CUSHION_SIN, R, SPIN_DECEL, SQUIRT, eCushion, muBall,
 } from "./constants";
+import { MAX_TILT, cueTilt } from "./cue";
 import { TABLE, openingAt, openingDist2, type Segment, type Point } from "./table";
 
 export interface Ball {
@@ -37,8 +38,12 @@ export interface Shot {
   dx: number; dy: number;
   /** Cue-ball speed off the tip, m/s. */
   speed: number;
-  /** Tip offset from the ball's centre as a fraction of R: side (+ is right) and height (+ is above). */
+  /** Tip offset from the ball's centre as a fraction of R, measured across the cue: side (+ is right) and
+   * height (+ is above). */
   side: number; height: number;
+  /** Sine of the cue's angle above the cloth (0 is level). Left out, it is worked out from the table as a
+   * player would raise the cue: a natural stance, more to clear the rails and the balls (src/sim/cue.ts). */
+  tilt?: number;
 }
 
 const SLIDE_A = MU_SLIDE * G;
@@ -271,12 +276,16 @@ export class Sim {
     let dx = shot.dx - SQUIRT * side * rx, dy = shot.dy - SQUIRT * side * ry;
     const l = Math.sqrt(dx * dx + dy * dy);
     dx /= l; dy /= l;
-    cue.vx = dx * speed; cue.vy = dy * speed;
-    // w = 5v/(2R) (side z + height (z x d)); height 0.4 is natural roll.
+    // A raised cue drives the ball down into the cloth too; the slate takes that part, the rest moves it on.
+    const ts = Math.min(Math.max(shot.tilt ?? cueTilt(this.balls, shot.dx, shot.dy, shot.side, shot.height), 0), MAX_TILT);
+    const tc = Math.sqrt(1 - ts * ts);
+    cue.vx = dx * speed * tc; cue.vy = dy * speed * tc;
+    // w = 5v/(2R) (side u + height (z x d)), u the cue's "up" across it, (dx ts, dy ts, tc); height 0.4 is
+    // natural roll. On a raised cue, side spin leans along the line of travel: the ball swerves (massé).
     const k = (5 * speed) / (2 * R);
-    cue.wx = k * height * -dy;
-    cue.wy = k * height * dx;
-    cue.wz = k * side;
+    cue.wx = k * (side * ts * dx - height * dy);
+    cue.wy = k * (side * ts * dy + height * dx);
+    cue.wz = k * side * tc;
     this.t = 0;
     this.events = [];
     this.emit({ t: 0, type: "cue", a: 0, speed, miscue });
