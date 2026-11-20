@@ -11,7 +11,8 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 ## Next session
 
 **Pick up here (21 November):** step 2 of **Replays and the cinematic break** (phase 9) is done and committed,
-not pushed: the camera director, lamps, and the winning shot replayed from low. Ask the user how it looks
+not pushed: the camera director, lamps, and the winning shot replayed from low. The user saw the first version
+and set the rule for every camera: outside the table, looking in at the action (see step 2). Ask how it looks
 (win a game, or with `?test` pot any ball and run `__pool.replay(true)` in the console). Next: step 3, the
 cinematic break. Waiting (the user, 21 November): maybe a stronger look for slow motion, such as a colour
 filter; not yet. The intermittent `npm run browser` failure is "friend match: join by code ...": Chrome's
@@ -695,16 +696,20 @@ to make clips for spreading the word). Four steps:
   - `src/render/director.ts`: `cut`, `glide`, `home` between poses (eye, look, up, fov, picture shift; table
     coordinates). The top view is `view.home`, worked out by `resize`; while `view.free` the director has the
     camera. Up turns smoothly from the cloth's up to the top view's, so the rise turns the table into place.
-    On narrow screens a low shot's field of view opens up (`fit`), or a phone held upright sees a sliver.
   - The winning shot (the 8 down, the shooter wins, any mode): 0.7 s after the last ball stops, the card is set
-    up behind it and `startReplay(true)` plays. `planCine` in `src/main.ts`: behind the cue ball, a little
-    aside and above the cue (higher with a raised cue), easing closer; cut to beyond the 8's pocket, low over
-    the rail, looking back along its last roll (from the pocket event's velocity), at the hit but at least
-    0.45 s before the drop and not in the first 0.25 s, so a ball near the pocket is seen being struck; up
-    into the top view (2.6 s) 0.35 s after the drop while the rest roll out; then the card. Pace by simulated
-    time (`cineRate`): slow for the stroke and first contact and from 0.7 s before the drop; normal speed
-    between them when the 8 has far to roll. About 9 s in all. A click skips it, camera straight home.
-    `body.cinema` fades out the bar, score, power, spin and labels; the badge moves to the top (the dark room).
+    up behind it and `startReplay(true)` plays; the script is `src/render/cinema.ts`. **Rule (the user, 21
+    November): every camera stands outside the table and looks in at the action**; a camera inside the table
+    filming out at a cushion or a lone pocket tells nothing. Cuts are good. So: the stroke from beyond the rail
+    behind the cue ball (back along the shot until past the cushions, +0.28 m), higher the further back and
+    above a raised cue, framed (`framed`: turned and zoomed to hold given points, for the screen's shape) on the
+    cue ball and the ball it hits, easing closer. Cut to beyond the pocket (0.55 m, 0.36 m up; further back on
+    a phone held upright), looking back along the ball's last roll, framed on the pocket, where the ball
+    started and a point toward the table's middle. The cut comes at the hit but at least 0.45 s before the drop
+    and not in the first 0.25 s, so a ball near the pocket is seen being struck. Up into the top view (2.6 s)
+    0.35 s after the drop while the rest roll out; then the card. Pace by simulated time (`cineRate`): slow
+    for the stroke and first contact and from 0.7 s before the drop; normal speed between them when the 8 has
+    far to roll. About 9 s in all. A click skips it, camera straight home. `body.cinema` fades out the bar,
+    score, power, spin and labels; the badge moves to the top (the dark room).
   - Lamps (`src/render/lamps.ts`): three dark green shades on a bar, bright diffusers, rods up into the dark,
     fading out as the camera rises from 0.55 to 0.85 m (from the top view they would stand in front of the cloth).
   - Low angles: cushion faces were black (one light from straight above); the lamps now light faces that

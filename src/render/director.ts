@@ -31,24 +31,11 @@ export class Director {
   /** Height of the camera above the cloth now. */
   get height() { return this.view.free ? this.now.eye.z : this.view.home.eye.z; }
 
-  /**
-   * A placement's field of view is for a landscape screen; on a narrower one it opens up (most of the way to the
-   * same width), or a phone held upright would see a sliver.
-   */
-  private fit(p: Pose): Pose {
-    const q = copyPose(p), a = this.view.camera.aspect;
-    if (a < 1.4) {
-      const t = Math.tan(THREE.MathUtils.degToRad(p.fov / 2)) * Math.min(2, Math.pow(1.4 / a, 0.6));
-      q.fov = THREE.MathUtils.radToDeg(2 * Math.atan(t));
-    }
-    return q;
-  }
-
   /** Straight to a placement. */
   cut(p: Pose) {
     this.view.free = true;
     this.move = null;
-    this.now = this.fit(p);
+    this.now = copyPose(p);
     this.view.place(this.now);
   }
 
@@ -56,7 +43,7 @@ export class Director {
   glide(p: Pose, seconds: number, arc = 0) {
     if (!this.view.free) this.now = copyPose(this.view.home);
     this.view.free = true;
-    this.move = { from: copyPose(this.now), to: this.fit(p), t: 0, len: seconds, arc };
+    this.move = { from: copyPose(this.now), to: copyPose(p), t: 0, len: seconds, arc };
   }
 
   /** Back to the top view over `seconds` (0: at once). */

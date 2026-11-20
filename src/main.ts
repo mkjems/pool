@@ -11,7 +11,7 @@ import { HEAD_X, TABLE } from "./sim/table";
 import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
 import { Director, pose } from "./render/director";
-import type { Pose } from "./render/scene";
+import { planCine, cineRate, type Cine } from "./render/cinema";
 import { LampView } from "./render/lamps";
 import { makeTable, CLOTHS, type Cloth } from "./render/table";
 import { makeBalls, spin as turnBall, ballColor, isStripe } from "./render/balls";
@@ -70,16 +70,9 @@ let lastPlayed: Played | null = null;
  * Watching it: the cue drawn back ("lead"), the stroke, the balls running, a moment's hold at the end. In slow
  * motion until what matters is over (the last ball down, or a little after the first contact), then faster.
  * `from`: the state to go back to; `after`: how the balls were turned before it. `cine`: seen from low (the
- * winning shot), with its own camera script and pace.
+ * winning shot), with its own camera script and pace (src/render/cinema.ts).
  */
 interface Replaying { p: Played; from: State; phase: "lead" | "stroke" | "run" | "hold"; t: number; rate: number; slowUntil: number; after: THREE.Quaternion[]; cine: Cine | null }
-/**
- * A replay seen from low: behind the cue ball for the stroke, cut to a camera beyond the pocket as the ball that
- * matters (the 8) is hit, so it rolls toward us and drops; then up into the top view. Times are simulated seconds.
- * `slow`: the stretches played in slow motion (the stroke and first contact, the last moments before the drop and
- * the fall); between them, normal speed.
- */
-interface Cine { behind: Pose; closer: Pose; byPocket: Pose; nearer: Pose; cut: number; pot: number; slow: Array<[number, number]>; cutDone: boolean; rising: boolean }
 let replaying: Replaying | null = null;
 let acc = 0;
 let guideDirty = true;
@@ -1123,60 +1116,18 @@ function slowPart(events: readonly SimEvent[]) {
   return Math.min(3, pot >= 0 ? pot + 0.6 : contact >= 0 ? contact + 0.8 : 0.8);
 }
 
-const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-
-/** The camera script for a replay seen from low, if a ball went down (the 8 if it did, else the last one). */
-function planCine(p: Played): Cine | null {
-  const pots = p.events.filter((e) => e.type === "pocket" && e.a !== 0) as Extract<SimEvent, { type: "pocket" }>[];
-  const pot = pots.find((e) => e.a === 8) ?? pots[pots.length - 1];
-  if (!pot) return null;
-  const c = p.before[0], s = p.shot;
-  const d = new THREE.Vector2(s.dx, s.dy).normalize(), n = new THREE.Vector2(-d.y, d.x);
-  // Behind the cue ball, a little to one side and above the cue; higher and further aside the more it is raised.
-  const tilt = s.tilt ?? cueTilt(p.before, s.dx, s.dy, s.side, s.height);
-  const lift = 0.19 + tilt * 0.5, aside = 0.05 + tilt * 0.4;
-  const back = (k: number, z: number) => v3(c.x - d.x * k + n.x * aside, c.y - d.y * k + n.y * aside, z);
-  const ahead = v3(c.x + d.x * 0.55, c.y + d.y * 0.55, 0);
-  // Beyond the pocket, low over the rail, looking back along the ball's last roll.
-  const P = TABLE.pockets[pot.pocket];
-  const u = new THREE.Vector2(pot.vx, pot.vy);
-  if (u.lengthSq() < 1e-8) u.set(P.ux, P.uy);
-  u.normalize();
-  const from = (k: number, z: number) => v3(P.hx + u.x * k, P.hy + u.y * k, z);
-  const look = v3(P.hx - u.x * 0.3, P.hy - u.y * 0.3, 0); // the pocket in the lower third
-  // The cut: as the ball is hit, but at least 0.45 s before it drops (so a ball near the pocket is seen being
-  // struck from there), and not in the first quarter second (the stroke is seen from behind).
-  const first = p.events.find((e) => e.type === "ball");
-  const hit = p.events.find((e) => e.type === "ball" && (e.a === pot.a || e.b === pot.a));
-  const cut = Math.max(0.25, Math.min((hit?.t ?? pot.t) + 0.03, pot.t - 0.45));
-  const opening: [number, number] = [0, (first?.t ?? 0) + 0.35];
-  const drop: [number, number] = [Math.max(cut - 0.2, pot.t - 0.7), pot.t + 0.35];
-  const slow: Array<[number, number]> = drop[0] <= opening[1] + 0.6 ? [[0, drop[1]]] : [opening, drop];
-  return {
-    behind: pose(back(0.62, lift), ahead, 38), closer: pose(back(0.46, lift - 0.03), ahead, 38),
-    byPocket: pose(from(0.3, 0.22), look, 46), nearer: pose(from(0.25, 0.2), look, 46),
-    cut, pot: pot.t, slow, cutDone: false, rising: false,
-  };
-}
-
-/** Pace of a low replay at simulated time t: slow in its slow stretches, easing to normal speed between them. */
-function cineRate(c: Cine, t: number) {
-  let gap = Infinity;
-  for (const [a, b] of c.slow) gap = Math.min(gap, t < a ? a - t : t > b ? t - b : 0);
-  return REPLAY_SLOW + (1 - REPLAY_SLOW) * smoothstep(Math.min(1, gap / 0.3));
-}
-const smoothstep = (k: number) => k * k * (3 - 2 * k);
-
 /** `low`: seen from low (the winning shot), when a ball went down; otherwise from the top. */
 function startReplay(low = false) {
   if (!canReplay()) return;
   const p = lastPlayed!;
   sound.unlock();
-  const cine = low ? planCine(p) : null;
+  const cine = low
+    ? planCine(p.before, p.shot, p.shot.tilt ?? cueTilt(p.before, p.shot.dx, p.shot.dy, p.shot.side, p.shot.height), p.events, view.camera.aspect)
+    : null;
   replaying = { p, from: state, phase: "lead", t: 0, rate: REPLAY_SLOW, slowUntil: slowPart(p.events), after: ballViews.map((v) => v.mesh.quaternion.clone()), cine };
   if (cine) {
-    director.cut(cine.behind);
-    director.glide(cine.closer, 2.2);
+    director.cut(cine.stroke);
+    director.glide(cine.strokeIn, 2.2);
     document.body.classList.add("cinema");
   }
   state = "replay";
@@ -1226,12 +1177,12 @@ function runReplay(dt: number) {
   } else if (r.phase === "run") {
     const c = r.cine, t = sim!.t;
     if (c) {
-      r.rate = cineRate(c, t);
+      r.rate = cineRate(c, t, REPLAY_SLOW);
       showSlowness(r.rate);
       if (!c.cutDone && t >= c.cut) {
         c.cutDone = true;
-        director.cut(c.byPocket);
-        director.glide(c.nearer, (c.pot - t) / REPLAY_SLOW + 1.5);
+        director.cut(c.pocket);
+        director.glide(c.pocketIn, (c.pot - t) / REPLAY_SLOW + 1.5);
       }
       // The ball is down: up into the top view while the others roll out at normal speed.
       if (!c.rising && t > c.slow[c.slow.length - 1][1]) { c.rising = true; director.home(2.6); }
