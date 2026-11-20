@@ -37,7 +37,14 @@
       <a class="brand" href="https://mkjems.dk/" title="More games at mkjems.dk">Pool</a>
       <nav>
         <button id="b-menu" title="Menu">Menu</button>
-        <button id="b-replay" title="Watch the last shot again, in slow motion (R)" disabled>Replay</button>
+        <span class="pick">
+          <button id="b-replay" title="Watch the last shot again, in slow motion (R: top-down, Shift+R: camera angles)"
+            aria-haspopup="menu" aria-expanded="false" disabled>Replay</button>
+          <span id="replay-menu" class="pick-menu" role="menu" hidden>
+            <button role="menuitem" data-replay="top">Top-down</button>
+            <button role="menuitem" data-replay="cam">Camera angles</button>
+          </span>
+        </span>
         <button id="b-labels" title="Show ball numbers (hold Space)">Numbers</button>
         <button id="b-guide" title="Aim guide (G)">Guide: full</button>
         <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
@@ -114,7 +121,10 @@
         <h1 id="over-title">Player 1 wins</h1>
         <p id="over-why"></p>
         <button id="b-rematch" class="primary">Rematch</button>
-        <button id="b-over-replay">Watch the shot again</button>
+        <div class="pair">
+          <button id="b-over-replay">Replay top-down</button>
+          <button id="b-over-cam">Camera angles</button>
+        </div>
         <button id="b-over-menu">Menu</button>
       </div>
     </div>

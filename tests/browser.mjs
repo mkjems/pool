@@ -245,6 +245,23 @@ await scenario("the winning replay: a click skips it, straight to the card in th
   check(Math.abs(c.x - 640) < 2 && Math.abs(c.y - 400) < 40, "the table where it was", JSON.stringify(c));
 });
 
+await scenario("replay with camera angles from the Replay menu, from the bottom side; a click skips it", async (open) => {
+  const p = await open();
+  await p.click("[data-mode=practice]");
+  await pool(p, () => { window.__pool.place([[0, -0.5, 0], [1, 0.2, 0.05]]); window.__pool.aimAt(0.2, 0.05); window.__pool.shoot(0.3); });
+  await played(p);
+  await p.waitForFunction(() => !document.querySelector("#b-replay").disabled);
+  await p.click("#b-replay");
+  await p.click("[data-replay=cam]");
+  check((await pool(p, () => window.__pool.state())) === "replay" && (await pool(p, () => window.__pool.camAway())), "camera angles play");
+  check(await p.isHidden("#replay-menu"), "the menu closes");
+  await p.waitForTimeout(800);
+  const eyeBelow = await p.evaluate(() => { const c = window.__pool.camera(); return c.y < -0.6; });
+  check(eyeBelow, "the camera stands on the bottom side of the table", JSON.stringify(await p.evaluate(() => window.__pool.camera())));
+  await p.mouse.click(640, 400);
+  check((await pool(p, () => window.__pool.state())) === "aim" && !(await pool(p, () => window.__pool.camAway())), "skipped: back in the top view");
+});
+
 await scenario("a foul gives the other player ball in hand", async (open) => {
   const p = await open();
   await p.click("[data-mode=pass]");
@@ -383,6 +400,8 @@ await scenario("replay: the last shot again in slow motion, ending where it did;
   check(await p.isEnabled("#b-replay"), "Replay is offered after the shot");
   const t0 = Date.now();
   await p.click("#b-replay");
+  check(await p.isVisible("[data-replay=cam]"), "Replay offers top-down and camera angles");
+  await p.click("[data-replay=top]");
   check((await pool(p, () => window.__pool.state())) === "replay" && (await p.isVisible("#replay-badge")), "the replay plays, with its badge");
   check((await p.textContent("#replay-badge .speed")) === "in slow motion", "the badge says it is slowed down");
   const start = await pool(p, () => window.__pool.balls());

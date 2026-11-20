@@ -920,7 +920,7 @@ function showOver(title: string, why: string, rematch: boolean) {
   $("#over-title").textContent = title;
   $("#over-why").textContent = why;
   $("#b-rematch").hidden = !rematch;
-  $("#b-over-replay").hidden = !lastPlayed;
+  $("#b-over-replay").hidden = $("#b-over-cam").hidden = !lastPlayed;
   $("#over").hidden = false;
 }
 $("#b-menu").addEventListener("click", showMenu);
@@ -1019,8 +1019,8 @@ window.addEventListener("keydown", (e) => {
   if (k === "g") guideBtn.click();
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
-  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; endReplay(); }
-  else if (k === "r" && !e.repeat) replayBtn.click();
+  else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; showReplayMenu(false); endReplay(); }
+  else if (k === "r" && !e.repeat) { showReplayMenu(false); if (state === "replay") endReplay(); else startReplay(e.shiftKey); }
   else if (watching()) return;
   else if (state === "aim" && (k === "arrowleft" || k === "arrowright")) rotateAim((k === "arrowleft" ? 1 : -1) * (e.shiftKey ? 0.0175 : 0.00175));
   else if (k === "w") setTip(tip.side, tip.height + 0.1);
@@ -1116,13 +1116,14 @@ function slowPart(events: readonly SimEvent[]) {
   return Math.min(3, pot >= 0 ? pot + 0.6 : contact >= 0 ? contact + 0.8 : 0.8);
 }
 
-/** `low`: seen from low (the winning shot), when a ball went down; otherwise from the top. */
+/** `low`: with camera angles (src/render/cinema.ts); otherwise from the top. */
 function startReplay(low = false) {
   if (!canReplay()) return;
   const p = lastPlayed!;
   sound.unlock();
   const cine = low
-    ? planCine(p.before, p.shot, p.shot.tilt ?? cueTilt(p.before, p.shot.dx, p.shot.dy, p.shot.side, p.shot.height), view.camera.aspect)
+    ? planCine(p.before, p.shot, p.shot.tilt ?? cueTilt(p.before, p.shot.dx, p.shot.dy, p.shot.side, p.shot.height), view.camera.aspect,
+      new THREE.Vector2(-view.home.up.x, -view.home.up.y))
     : null;
   replaying = { p, from: state, phase: "lead", t: 0, rate: REPLAY_SLOW, slowUntil: slowPart(p.events), after: ballViews.map((v) => v.mesh.quaternion.clone()), cine };
   if (cine) {
@@ -1197,8 +1198,21 @@ function runReplay(dt: number) {
   } else if (r.t >= 0.6) endReplay();
 }
 
-replayBtn.addEventListener("click", () => (state === "replay" ? endReplay() : startReplay()));
+// Replay opens a small menu: top-down or camera angles.
+const replayMenu = $("#replay-menu");
+function showReplayMenu(open: boolean) {
+  replayMenu.hidden = !open;
+  replayBtn.setAttribute("aria-expanded", String(open));
+}
+replayBtn.addEventListener("click", () => (state === "replay" ? endReplay() : showReplayMenu(replayMenu.hidden)));
+replayMenu.querySelectorAll<HTMLButtonElement>("button").forEach((b) =>
+  b.addEventListener("click", () => { showReplayMenu(false); startReplay(b.dataset.replay === "cam"); }));
+// A press anywhere else closes it.
+document.addEventListener("pointerdown", (e) => {
+  if (!replayMenu.hidden && !(e.target as Element).closest(".pick")) showReplayMenu(false);
+}, true);
 $("#b-over-replay").addEventListener("click", () => startReplay());
+$("#b-over-cam").addEventListener("click", () => startReplay(true));
 $("#replay-badge .hint").textContent = matchMedia("(pointer: coarse)").matches ? "tap to skip" : "click to skip";
 
 // ------------------------------------------------------------------ frame loop
@@ -1328,6 +1342,7 @@ function frame(now: number) {
   const canWatch = canReplay() || state === "replay";
   if (replayBtn.disabled === canWatch) {
     replayBtn.disabled = !canWatch;
+    if (!canWatch) showReplayMenu(false);
     // Just offered (a shot has played out): the button glows for a moment, so it is found.
     replayBtn.classList.remove("fresh");
     if (canWatch && state !== "replay") { void replayBtn.offsetWidth; replayBtn.classList.add("fresh"); }
@@ -1361,6 +1376,8 @@ if (new URLSearchParams(location.search).has("test")) {
     cine: () => replaying?.cine ? { beats: replaying.cine.beats.map((b) => b.from), slow: replaying.cine.slow, riseAt: replaying.cine.riseAt } : null,
     /** The camera is away from the top view (the director has it). */
     camAway: () => director.active,
+    /** Where the camera is (table coordinates). */
+    camera: () => ({ x: director.eye.x, y: director.eye.y, z: director.eye.z }),
     /** Put the camera somewhere (table coordinates), or back home with no arguments. */
     cam: (eye?: number[], look?: number[], fov?: number) => {
       if (!eye || !look) director.home();

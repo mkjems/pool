@@ -697,6 +697,10 @@ to make clips for spreading the word). Four steps:
   - `src/render/director.ts`: `cut`, `glide`, `home` between poses (eye, look, up, fov, picture shift; table
     coordinates). The top view is `view.home`, worked out by `resize`; while `view.free` the director has the
     camera. Up turns smoothly from the cloth's up to the top view's, so the rise turns the table into place.
+  - The Replay button is a small menu (21 November, the user): **Top-down** (R) or **Camera angles**
+    (Shift+R); the game-over card has both ("Replay top-down", "Camera angles"). Camera angles work for any
+    shot: with nothing potted, the opening only, rising once the first contact has played out. A cut that
+    would hardly change the picture (camera within 0.6 m, turned under 20°) is a glide instead.
   - The winning shot (the 8 down, the shooter wins, any mode): 0.7 s after the last ball stops, the card is set
     up behind it and `startReplay(true)` plays; the script is `src/render/cinema.ts`. **The user's rules (21
     November):** every camera stands outside the table and looks in at the action (a camera inside the table
@@ -708,11 +712,15 @@ to make clips for spreading the word). Four steps:
     pocket. No close-ups in a replay; they belong to a montage (step 3, the cinematic break). The opening
     has the table's wooden edges, near and far, in the picture (no cloth running out of the frame at the
     bottom or top). No strong perspective (the user: avoid extreme 3D distortion of the table): long lenses
-    from further back, even if the action is not in the middle of the picture.
+    from further back, even if the action is not in the middle of the picture. Every camera stays on the
+    bottom side of the table as the top view shows it (within 45° of "down the screen" from the action:
+    the near long rail on a wide screen, the near short end on a phone held upright); flying round the
+    table confuses. So the rise into the top view only tilts up (turning at most 45°).
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
     the opening (from 25° or 40° off the line on the far side, or 30° off on the shooter's side, scored for
     distance about 1.1 m, a sensible field of view, and not standing where the first pocket camera will, so
-    the cut changes the picture). `establish`: from the actors' middle, out past the table along the chosen
+    the cut changes the picture; now: straight on from the bottom side preferred, never within 30° of
+    looking along the shot). `establish`: from the actors' middle, out past the table along the chosen
     side, then further back until a lens of at most 32° holds them all and the outer edges of the wood
     near and far along the line of sight (with 7 and 10 cm of room) (`framed`: turned and zoomed for the
     screen's shape), looking down about 25° (camera up to 2.6 m up). Then one beat per ball going down:
