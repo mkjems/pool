@@ -71,10 +71,9 @@ export class Director {
   }
 
   /**
-   * Back to the top view over `seconds`, keeping the whole table in the picture: first, from where it stands,
-   * the camera turns and opens out to hold all of `table` (its corners); then it rises, turned on the table and
-   * wide enough to hold it at every moment, easing into the exact top view only at the end. No panning down
-   * with the table sliding out of the top of the picture.
+   * Back to the top view over `seconds`, in one eased movement: the camera climbs from where it stands to the
+   * top view, turning from what it looked at onto the table (`table`: its corners) and opening out toward the
+   * table's sides as it goes, so the table grows to fill the picture and settles as the top view.
    */
   rise(seconds: number, table: THREE.Vector3[]) {
     if (!this.view.free) return;
@@ -82,33 +81,29 @@ export class Director {
   }
 
   private riseStep(m: NonNullable<Director["move"]>) {
-    const T = Math.min(1, m.t / m.len), s = smooth(T);
+    // One easing for everything (smootherstep: still at both ends, no stages).
+    const T = Math.min(1, m.t / m.len), s = T * T * T * (T * (6 * T - 15) + 10);
     const home = this.view.home, a = m.from, n = this.now, aspect = this.view.camera.aspect, table = m.table!;
+    // A crane shot: the eye climbs to the top view's while what it looks at slides across the cloth, from where
+    // the last camera looked to the table's middle (where the top view looks).
     n.eye.lerpVectors(a.eye, home.eye, s);
-    const up = a.up.clone().lerp(home.up, s).normalize();
-    // Toward the whole table: turned on its middle (the mean of the directions to its corners).
-    const onTable = new THREE.Vector3();
-    for (const p of table) onTable.add(p.clone().sub(n.eye).normalize());
-    onTable.normalize();
-    // 1. From the last shot's framing to the whole table, in the first fifth.
-    const k1 = smooth(Math.min(1, T / 0.2));
-    const dir = a.look.clone().sub(a.eye).normalize().lerp(onTable, k1).normalize();
-    let fov = a.fov;
-    // 2. Into the exact top view, in the last third.
-    const w = smooth(Math.max(0, Math.min(1, (T - 0.66) / 0.34)));
-    dir.lerp(home.look.clone().sub(home.eye).normalize(), w).normalize();
-    if (Math.abs(dir.dot(up)) > 0.999) up.copy(home.up);
-    // Just wide enough for the table at every moment (from the turn on), becoming the top view's at the end.
-    const need = fovFor(n.eye, dir, up, table, aspect);
-    fov += (need - fov) * k1;
-    // Late: the top view's own lens is a little narrower than this framing (it leaves less room); handing over
-    // early let a corner slip off a narrow screen while the camera was still turning.
-    fov += (home.fov - fov) * w * w * w * w;
+    const aDir = a.look.clone().sub(a.eye).normalize();
+    // Where the last camera's line of sight meets the cloth (not too far off, for a camera looking level).
+    const focus = a.eye.clone().addScaledVector(aDir, Math.min(6, a.eye.z / Math.max(0.1, -aDir.z))).lerp(home.look, s);
+    const dir = focus.sub(n.eye).normalize();
+    const up = a.up.clone().lerp(home.up, s);
+    up.addScaledVector(dir, -up.dot(dir));
+    if (up.lengthSq() < 1e-6) up.copy(home.up);
+    up.normalize();
+    // The lens opens toward the one that holds the whole table from here, scaled so that from the top it is the
+    // top view's own lens: the table's sides come in as the camera climbs.
+    const homeDir = home.look.clone().sub(home.eye).normalize();
+    const fit = fovFor(n.eye, dir, up, table, aspect) * home.fov / fovFor(home.eye, homeDir, home.up, table, aspect);
+    n.fov = a.fov + (fit - a.fov) * s;
     n.look.copy(n.eye).add(dir);
-    n.fov = fov;
-    n.shiftX = a.shiftX + (home.shiftX - a.shiftX) * w;
-    n.shiftY = a.shiftY + (home.shiftY - a.shiftY) * w;
-    n.up.copy(up).addScaledVector(dir, -up.dot(dir)).normalize();
+    n.up.copy(up);
+    n.shiftX = a.shiftX + (home.shiftX - a.shiftX) * s;
+    n.shiftY = a.shiftY + (home.shiftY - a.shiftY) * s;
   }
 
   /** How far along a rise home is (0 to 1), or null when not rising. */

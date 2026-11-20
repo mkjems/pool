@@ -1385,10 +1385,10 @@ if (new URLSearchParams(location.search).has("test")) {
         return q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight;
       }).map((b) => b.id);
     },
-    /** During the rise into the top view, once the table has been opened out to: its corners off the screen. */
+    /** In the second half of the rise into the top view (the table opened out to): its corners off the screen. */
     cornersOut: () => {
       const k = director.rising;
-      if (k === null || k < 0.2) return [];
+      if (k === null || k < 0.5) return [];
       return TABLE_CORNERS.map((c, i) => [i, view.toScreen(c.x, c.y, c.z)] as const)
         .filter(([, q]) => q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight).map(([i]) => i);
     },

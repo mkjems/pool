@@ -721,12 +721,14 @@ to make clips for spreading the word). Four steps:
     on, from its cut to the next cut or the rise; on a break that is the whole spread of the rack.
     `__pool.outOfShot()` lists moving balls off the screen while a camera is on; a browser test steps two
     breaks frame by frame and expects none (the previous director lost the 3, 6 and cue ball on one).
-    **The rise keeps the whole table in view** (the user): `director.rise` first turns and opens out, from
-    where the last camera stands, to all four outer corners of the wood (`TABLE_CORNERS`), in the first
-    fifth; then climbs turned on the table, the lens just wide enough for it at every moment (`fovFor`),
-    turning into the top view's direction in the last third and taking the top view's own lens only at the
-    very end (it is narrower; handing over earlier let a corner slip off a phone's edge). `__pool.cornersOut()`
-    lists corners off the screen during the rise; the browser test checks it on both breaks.
+    **The rise is one fluent movement** (the user: the staged version was too complex and jerky; it should
+    stretch for the table's sides as it rises): `director.rise` is a crane shot on a single smootherstep
+    easing: the eye climbs straight to the top view's, what it looks at slides across the cloth from where
+    the last camera looked to the table's middle, and the lens eases toward the one that holds the whole
+    table from there (`fovFor` on `TABLE_CORNERS`, scaled so from the top it is the top view's own lens).
+    The lens opens a little (35° to about 43° on a wide screen) and closes into the top view; no stages,
+    no handover. `__pool.cornersOut()` lists corners off the screen in the second half of the rise (the
+    sides come in during the first); the browser test checks it on both breaks.
     Lamps: shown unless, seen from the camera, a shade or the bar lies over the table (followed from the eye
     down to the cloth); they hid the cloth on a phone's rise.
   - How: `planCine` plays the shot once ahead (deterministic) to know where every ball is, every 10 ms. Beats:
