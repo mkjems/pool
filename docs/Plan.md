@@ -10,6 +10,12 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 ## Next session
 
+**Pick up here (20 November, evening):** the user wants the camera work next, step 2 of **Replays and the
+cinematic break** under phase 9: a camera director and a low camera, starting with the winning shot replayed
+automatically. Replay of the last shot (step 1) is done and committed, not pushed; ask the user how it feels
+(the button found? the slow motion?). One intermittent failure in `npm run browser` (1 run in 6, scenario
+unknown); note which one if it shows up again.
+
 Handoff written 17 November 2026, end of the first working session. Start here.
 
 **State.** `main` is on GitHub (`mkjems/pool`, public); every push deploys to https://pool.mkjems.dk, so ask
