@@ -49,6 +49,23 @@ front edge of each hole is round, never straight (the user: "that is not how poo
    after the change (the measuring snippet is in the commit "Smooth: 60 fps" and below).
 2. ~~The power bar overlaps the right cushion on a phone held upright.~~ Done 18 November: on phones the
    table fits the space the controls leave free, with air around it (see phase 2).
+3. **The cue rises over balls, and the rise counts in the physics** (20 November). The user saw the cue pass
+   straight through a ball behind the cue ball, and asked for the cue to lift as a player's would, with the
+   consequences for the shot.
+   - [x] Part 1, the picture (20 November). `src/render/cue.ts`: the cue lies on its real tilted axis (tip
+     where the axis enters the ball, tip offset measured across the cue), and the butt rises in 0.01 rad steps
+     from 0.12 until the cue clears the rails and every ball on the cloth (`clears`), up to 1.2 rad (69°). A
+     ball is checked against the cue as if the tip were at its struck position, so the cue does not sink
+     during the stroke. The physics is unchanged.
+   - [ ] Part 2, the physics. Move the "how high must the cue rise" calculation into `src/sim/` (only the
+     allowed maths), add the cue's tilt to `Shot` as numbers (not an angle), and let `strike()` work from the
+     cue's 3D direction: less speed (part of the hit goes into the cloth), and with side spin a swerve or
+     massé curve (sliding already follows a curve when the slip is sideways, `src/sim/physics.ts`). No jump
+     shots (balls would need height, flight and landing). A level cue must give bit-identical results, so the
+     200 reference shots stay; add reference shots with a raised cue. The computer simulates its shots, so it
+     follows on its own; friend matches send the tilt in the shot.
+     To decide with the user first: does the constant 7° lift count (every side-spin shot curves a little,
+     as in real pool), or only the lift above it? Later, maybe: raising the cue on purpose for massé.
 
 **What the user has said so far** (the game should keep these):
 - Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.

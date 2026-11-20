@@ -4,9 +4,9 @@ import * as THREE from "three";
 import { R, TABLE_L, TABLE_W } from "../sim/constants";
 import { CUSHION_H, CUSHION_W, RAIL_W, RIM_TOP } from "./table";
 
-// Radians the butt is raised: at least this, more when the cue ball is near a cushion so the cue clears the
-// cushion and the wood (as a player raises the butt there), up to the most a player would.
-const ELEVATION = 0.12, MAX_ELEVATION = 0.7;
+// Radians the butt is raised: at least this, more when the cue would touch a cushion, the wood or another ball
+// (as a player raises the butt there), up to the most a player would.
+const ELEVATION = 0.12, MAX_ELEVATION = 1.2;
 const CLEAR = 0.004; // air between the cue and the rail
 const TIP_R = 0.0064, BUTT_R = 0.0145, LENGTH = 1.5;
 
@@ -70,32 +70,74 @@ export class CueView {
     parent.add(this.group);
   }
 
-  /** Place the cue behind the ball at (x, y), aiming (dx, dy), pulled back `pull` metres, tip at (side, height). */
-  set(x: number, y: number, dx: number, dy: number, pull: number, side: number, height: number, visible: boolean) {
+  /**
+   * Place the cue behind the ball at (x, y), aiming (dx, dy), pulled back `pull` metres, tip at (side, height)
+   * measured across the cue. The butt is raised as little as possible to clear the rails and the other balls
+   * (`others`: x, y of each ball on the cloth, the cue ball left out).
+   */
+  set(x: number, y: number, dx: number, dy: number, pull: number, side: number, height: number, visible: boolean,
+    others: readonly { x: number; y: number }[] = []) {
     this.group.visible = this.shadow.visible = visible;
     if (!visible) return;
-    const rx = dy, ry = -dx; // right of the aim
     const back = 0.012 + pull;
-    // Tip at the struck point on the ball's back, then pulled back along the cue's own axis.
-    const cx = x - dx * R * 0.9 + rx * side * R;
-    const cy = y - dy * R * 0.9 + ry * side * R;
-    const cz = R + height * R;
-    // Walk back under the cue: wherever it passes over the cushion or the wood, raise it enough to clear them.
-    let tan = Math.tan(ELEVATION);
-    for (let t = back; t < back + LENGTH; t += 0.005) {
-      const h = railHeight(cx - dx * t, cy - dy * t);
-      if (h === 0) continue;
-      const r = TIP_R + (BUTT_R - TIP_R) * ((t - back) / LENGTH);
-      tan = Math.max(tan, (h + r + CLEAR - cz) / t);
+    let elevation = MAX_ELEVATION;
+    for (let e = ELEVATION; e < MAX_ELEVATION; e += 0.01) {
+      if (clears(axis(x, y, dx, dy, side, height, e), back, others)) { elevation = e; break; }
     }
-    const elevation = Math.min(MAX_ELEVATION, Math.atan(tan));
-    const ch = Math.cos(elevation), sh = Math.sin(elevation);
-    this.group.position.set(cx - dx * back * ch, cy - dy * back * ch, cz + back * sh);
+    const a = axis(x, y, dx, dy, side, height, elevation);
+    this.group.position.set(a.qx - a.fx * back, a.qy - a.fy * back, a.qz - a.fz * back);
     this.group.rotation.set(0, elevation, Math.atan2(dy, dx), "ZYX");
-    const mid = back + 0.7;
-    this.shadow.position.set(cx - dx * mid * ch + 0.012, cy - dy * mid * ch - 0.012, 0.001);
+    const ch = Math.cos(elevation);
+    const mid = (back + 0.7) * ch;
+    this.shadow.position.set(a.qx - dx * mid + 0.012, a.qy - dy * mid - 0.012, 0.001);
     this.shadow.rotation.set(0, 0, Math.atan2(dy, dx));
+    this.shadow.scale.x = ch;
   }
+}
+
+/** The cue's axis at `elevation`: where the tip meets the ball (q) and the unit direction it points (f). */
+interface Axis { qx: number; qy: number; qz: number; fx: number; fy: number; fz: number }
+
+function axis(x: number, y: number, dx: number, dy: number, side: number, height: number, elevation: number): Axis {
+  const c = Math.cos(elevation), s = Math.sin(elevation);
+  const fx = dx * c, fy = dy * c, fz = -s; // forward and down
+  const ux = dx * s, uy = dy * s, uz = c; // "up" across the cue
+  const rx = dy, ry = -dx; // right of the aim
+  // The axis passes the ball's centre at the tip offset; the tip touches where it enters the ball.
+  const off = Math.min(side * side + height * height, 0.81);
+  const back = R * Math.sqrt(1 - off);
+  return {
+    qx: x + (rx * side + ux * height) * R - fx * back,
+    qy: y + (ry * side + uy * height) * R - fy * back,
+    qz: R + uz * height * R - fz * back,
+    fx, fy, fz,
+  };
+}
+
+/** Whether the cue, its tip `back` metres behind the ball, misses the rails and the other balls. */
+function clears(a: Axis, back: number, others: readonly { x: number; y: number }[]): boolean {
+  const h = Math.sqrt(a.fx * a.fx + a.fy * a.fy) || 1; // horizontal part of the axis
+  for (let t = back; t < back + LENGTH; t += 0.01) {
+    const px = a.qx - a.fx * t, py = a.qy - a.fy * t, pz = a.qz - a.fz * t;
+    const rail = railHeight(px, py);
+    if (rail === 0) continue;
+    const r = TIP_R + (BUTT_R - TIP_R) * ((t - back) / LENGTH);
+    if (pz - r / h < rail + CLEAR) return false;
+  }
+  // A ball is cleared when its centre is at least R + the cue's radius from the cue (between tip and butt).
+  // The tip is taken at its closest (as struck), so the cue does not sink as it moves forward.
+  const near = 0.012;
+  for (const o of others) {
+    const vx = o.x - a.qx, vy = o.y - a.qy, vz = R - a.qz;
+    const along = -(vx * a.fx + vy * a.fy + vz * a.fz); // distance back along the cue
+    if (along < near - R || along > back + LENGTH + R) continue;
+    const t = Math.min(Math.max(along, near), back + LENGTH);
+    const cx = a.qx - a.fx * t - o.x, cy = a.qy - a.fy * t - o.y, cz = a.qz - a.fz * t - R;
+    const r = TIP_R + (BUTT_R - TIP_R) * (Math.max(0, t - near) / LENGTH);
+    const min = R + r + CLEAR;
+    if (cx * cx + cy * cy + cz * cz < min * min) return false;
+  }
+  return true;
 }
 
 export interface GuidePath {
