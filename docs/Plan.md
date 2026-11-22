@@ -648,7 +648,7 @@ Sizes are relative: S, M, L.
 - [x] The relay, invite link and code, handshake with version check.
       `server/relay.mjs`. Versions: the build time (`__BUILD__`); the older browser reloads and rejoins.
       The link carries the code as a query, `?join=KX7Q` (22 November; was `#KX7Q`): a link that differs only
-      in its fragment doesn't load the page in a tab already showing the game. Old `#KX7Q` links still join.
+      in its fragment doesn't load the page in a tab already showing the game. Old `#KX7Q` links no longer join.
 - [x] Live aiming, shots, checksum, rejoin after a dropout.
       Each shot carries the shooter's exact balls and game before it, so the two can never drift apart; the
       watcher warns in the console if its own position differed (a determinism bug). Tested locally only.

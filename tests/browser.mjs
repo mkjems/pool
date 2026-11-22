@@ -394,7 +394,7 @@ await scenario("friend match: join by code, same shots, live aim, reload, rematc
   check((await a.textContent("#over-title")) === "Anna's friend left" || (await a.textContent("#over-title")).endsWith("left"), "the other is told");
 });
 
-await scenario("friend match: join by link, also in a tab already showing the game, also an old #CODE link", async (open) => {
+await scenario("friend match: join by link, also in a tab already showing the game", async (open) => {
   const host = async () => {
     const a = await open();
     await a.click("#b-online");
@@ -410,12 +410,6 @@ await scenario("friend match: join by link, also in a tab already showing the ga
   await b.goto(`${one.link}&test`);
   await both(one.a, b);
   check(new URL(b.url()).searchParams.get("join") === one.code, "the guest's address keeps the code, for a reload");
-  // A link from before (#CODE), typed over the address of an open game: only the fragment changes, still joins.
-  const two = await host();
-  const c = await open();
-  await c.evaluate((code) => { location.hash = code; }, two.code);
-  await both(two.a, c);
-  check(new URL(c.url()).searchParams.get("join") === two.code && !new URL(c.url()).hash, "and the address is tidied to ?join", c.url());
 });
 
 await scenario("friend match: replays on both screens; the player in turn starts and stops them", async (open) => {

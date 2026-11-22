@@ -1010,18 +1010,15 @@ $("#b-share").addEventListener("click", () => {
   void navigator.share?.({ title: "Pool", text: "Play a game of pool with me", url: $<HTMLInputElement>("#invite-link").value }).catch(() => {});
 });
 $("#b-invite-cancel").addEventListener("click", () => { leaveOnline(); mode = "practice"; showMenu(); });
-// Opened from a friend's link (pool.mkjems.dk/?join=KX7Q, or #KX7Q from before): join, or rejoin our seat after
-// a reload.
+// Opened from a friend's link (pool.mkjems.dk/?join=KX7Q): join, or rejoin our seat after a reload.
 {
-  const code = (new URLSearchParams(location.search).get("join") ?? location.hash.slice(1)).trim().toUpperCase();
+  const code = (new URLSearchParams(location.search).get("join") ?? "").trim().toUpperCase();
   if (/^[A-HJ-NP-Z2-9]{4}$/.test(code)) {
     const saved = savedSeat();
     if (saved && saved.code === code) { seat = saved.seat; connect(Link.rejoin(saved)); showInvite("Reconnecting to your game…", null); }
     else joinMatch(code);
   }
 }
-// An old #KX7Q link opened in a tab already showing the game only changes the fragment: load it properly.
-addEventListener("hashchange", () => { if (/^#[A-HJ-NP-Z2-9]{4}$/i.test(location.hash)) location.reload(); });
 
 const guideBtn = $("#b-guide"), soundBtn = $("#b-sound"), labelsBtn = $("#b-labels");
 function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
