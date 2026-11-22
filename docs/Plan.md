@@ -233,7 +233,7 @@ Recommendations until you confirm them. Each can be changed in phase 0 at no cos
 - **TypeScript, Vite, modules.** Not one file like Frontlines: the physics has to run in the page, in a Web
   Worker (for the computer opponent) and in Node (for tests), so it must be a module of its own.
 - **One small Node server**, serving the files and relaying friend matches over WebSocket, as in Frontlines
-  (`~/Code/frontlines/server/relay.mjs`). Pairing by link and 4-character code: `pool.mkjems.dk/#KX7Q`.
+  (`~/Code/frontlines/server/relay.mjs`). Pairing by link and 4-character code: `pool.mkjems.dk/?join=KX7Q`.
 - **Everything visual is generated or CC0.** Ball textures, cloth and table geometry are made in code, so they
   stay sharp at any size and need no artist. Wood and the reflected room can come from CC0 libraries (Poly Haven).
 - **Menus and score display are plain HTML over the canvas**, not drawn in 3D: sharp text, accessible, easy
@@ -647,6 +647,8 @@ Sizes are relative: S, M, L.
 
 - [x] The relay, invite link and code, handshake with version check.
       `server/relay.mjs`. Versions: the build time (`__BUILD__`); the older browser reloads and rejoins.
+      The link carries the code as a query, `?join=KX7Q` (22 November; was `#KX7Q`): a link that differs only
+      in its fragment doesn't load the page in a tab already showing the game. Old `#KX7Q` links still join.
 - [x] Live aiming, shots, checksum, rejoin after a dropout.
       Each shot carries the shooter's exact balls and game before it, so the two can never drift apart; the
       watcher warns in the console if its own position differed (a determinism bug). Tested locally only.

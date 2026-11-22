@@ -394,6 +394,30 @@ await scenario("friend match: join by code, same shots, live aim, reload, rematc
   check((await a.textContent("#over-title")) === "Anna's friend left" || (await a.textContent("#over-title")).endsWith("left"), "the other is told");
 });
 
+await scenario("friend match: join by link, also in a tab already showing the game, also an old #CODE link", async (open) => {
+  const host = async () => {
+    const a = await open();
+    await a.click("#b-online");
+    await a.click("#b-invite");
+    await a.waitForFunction(() => document.querySelector("#invite-code").textContent.length === 4);
+    return { a, link: await a.inputValue("#invite-link"), code: await a.textContent("#invite-code") };
+  };
+  const both = (a, b) => Promise.all([a, b].map((p) => p.waitForFunction(() => window.__pool?.online().match && window.__pool.state() === "aim", null, { timeout: 15000 })));
+  // The link as sent, opened where the game was already open: a query, so the page loads and joins.
+  const one = await host();
+  check(new URL(one.link).searchParams.get("join") === one.code && !new URL(one.link).hash, "the link carries the code as ?join", one.link);
+  const b = await open();
+  await b.goto(`${one.link}&test`);
+  await both(one.a, b);
+  check(new URL(b.url()).searchParams.get("join") === one.code, "the guest's address keeps the code, for a reload");
+  // A link from before (#CODE), typed over the address of an open game: only the fragment changes, still joins.
+  const two = await host();
+  const c = await open();
+  await c.evaluate((code) => { location.hash = code; }, two.code);
+  await both(two.a, c);
+  check(new URL(c.url()).searchParams.get("join") === two.code && !new URL(c.url()).hash, "and the address is tidied to ?join", c.url());
+});
+
 await scenario("friend match: replays on both screens; the player in turn starts and stops them", async (open) => {
   const { a, b } = await pair(open);
   // Anna (seat 0) to play a bank shot (tests/highlight.test.ts), from the same position on both screens.

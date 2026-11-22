@@ -206,6 +206,18 @@ function connect(l: Link) {
   l.onStatus = (s) => { if (s === "down") netBanner("Connection lost. Reconnecting…"); else if (s === "open") awayBanner(); };
 }
 
+/**
+ * The match in the address bar: pool.mkjems.dk/?join=KX7Q. A query, not a #fragment: opening a link that differs
+ * only in its fragment doesn't load the page (a browser reusing a tab, or a code pasted over another), and some
+ * apps drop fragments from shared links. Other parameters (?test) stay.
+ */
+function setJoinParam(code: string | null) {
+  const q = new URLSearchParams(location.search);
+  if (code) q.set("join", code); else q.delete("join");
+  const s = q.toString().replace(/=(?=&|$)/g, ""); // ?test, not ?test=
+  history.replaceState(null, "", location.pathname + (s ? `?${s}` : ""));
+}
+
 function showInvite(text: string, code: string | null) {
   // Whatever was on the table stops (the computer must not play on behind the card).
   endReplay();
@@ -218,7 +230,7 @@ function showInvite(text: string, code: string | null) {
   $("#invite-text").textContent = text;
   $("#invite-share").hidden = !code;
   if (!code) return;
-  const url = `${location.origin}${location.pathname}#${code}`;
+  const url = `${location.origin}${location.pathname}?join=${code}`;
   $<HTMLInputElement>("#invite-link").value = url;
   $("#invite-code").textContent = code;
   $("#b-share").hidden = !("share" in navigator);
@@ -242,7 +254,7 @@ function leaveOnline() {
   link = null;
   match = null;
   friendHere = false;
-  history.replaceState(null, "", location.pathname + location.search);
+  setJoinParam(null);
   netBanner(null);
 }
 
@@ -272,7 +284,7 @@ function onNet(m: FromRelay) {
     case "room":
       seat = m.seat;
       setOnlineNames(m.names);
-      history.replaceState(null, "", `#${m.code}`); // a reload rejoins
+      setJoinParam(m.code); // a reload rejoins
       if (seat === 0) showInvite("Send your friend this link. The game starts when they open it.", m.code);
       else showInvite(`Joined ${friendName()}'s game. Starting…`, null);
       break;
@@ -336,7 +348,7 @@ function onNet(m: FromRelay) {
       link = null;
       match = null;
       netBanner(null);
-      history.replaceState(null, "", location.pathname + location.search);
+      setJoinParam(null);
       showMenu();
       toast(m.message);
       break;
@@ -998,15 +1010,18 @@ $("#b-share").addEventListener("click", () => {
   void navigator.share?.({ title: "Pool", text: "Play a game of pool with me", url: $<HTMLInputElement>("#invite-link").value }).catch(() => {});
 });
 $("#b-invite-cancel").addEventListener("click", () => { leaveOnline(); mode = "practice"; showMenu(); });
-// Opened from a friend's link (pool.mkjems.dk/#KX7Q): join, or rejoin our seat after a reload.
+// Opened from a friend's link (pool.mkjems.dk/?join=KX7Q, or #KX7Q from before): join, or rejoin our seat after
+// a reload.
 {
-  const code = location.hash.slice(1).toUpperCase();
+  const code = (new URLSearchParams(location.search).get("join") ?? location.hash.slice(1)).trim().toUpperCase();
   if (/^[A-HJ-NP-Z2-9]{4}$/.test(code)) {
     const saved = savedSeat();
     if (saved && saved.code === code) { seat = saved.seat; connect(Link.rejoin(saved)); showInvite("Reconnecting to your game…", null); }
     else joinMatch(code);
   }
 }
+// An old #KX7Q link opened in a tab already showing the game only changes the fragment: load it properly.
+addEventListener("hashchange", () => { if (/^#[A-HJ-NP-Z2-9]{4}$/i.test(location.hash)) location.reload(); });
 
 const guideBtn = $("#b-guide"), soundBtn = $("#b-sound"), labelsBtn = $("#b-labels");
 function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
