@@ -105,7 +105,7 @@ front edge of each hole is round, never straight (the user: "that is not how poo
   features** (no emotes, shot clock or other extras until the user asks).
 
 **Sound, done 17 November, to judge by ear:** every sound rebuilt (`src/audio/sound.ts`), each event heard at
-its own moment in the simulation, a volume button, room sound (the Room button in the top bar), vibration on Android. See phase 5.
+its own moment in the simulation, a volume button, vibration on Android. See phase 5.
 
 **Pocket drops, done 17 November, to judge:** a potted ball now falls in 3D (`src/render/pocketfall.ts`), see
 phase 6. The user found the old slide-and-shrink "very bad" and asked for realism.
@@ -421,7 +421,7 @@ Recommended simplification: only the 8 needs a called pocket. Full call-shot can
 - Recorded samples, several per event, chosen and pitched by impact: ball on ball from a tick to a crack,
   cushion, pocket drop and the ball running down the return, cue tip (soft, hard, miscue), chalk, the break.
 - Volume and brightness follow the impulse the physics reports; position on the table pans left to right.
-- A faint rolling sound for fast balls, a short room reverb, optional room tone. No music by default.
+- A faint rolling sound for fast balls, a short room reverb. No music by default.
 - **Synthetic first.** The first sounds are made in code with Web Audio (no table to record on, answered 17
   November). Real CC0 recordings that you find replace them later, event by event.
 - Vibration on shots and pots where the phone allows it.
@@ -608,7 +608,8 @@ Sizes are relative: S, M, L.
       Rolling: removed (17 November). Filtered noise (a low rumble and a cloth hiss following the balls' speed)
       "sounds like a sea breeze": the user asked for it off. A better try would need something other than
       noise, or a recording. Room: early reflections
-      and a 0.9 s tail darker as it decays. Room sound (the air of a hall) is off by default, the Room button in the top bar.
+      and a 0.9 s tail darker as it decays. Room tone (the air of a hall, a Room button in the top bar): removed
+      24 November, the user asked for it gone.
       Volume: the Sound button steps high, medium, low, off; M mutes and unmutes. Vibration on the strike and
       on pots after touch input (Android; iPhones have no vibration API).
 

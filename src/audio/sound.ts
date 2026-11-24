@@ -66,12 +66,9 @@ export class Sound {
   private ctx: BaseAudioContext | null = null;
   private master!: GainNode;
   private wet!: GainNode;
-  private noise!: AudioBuffer;
-  private room!: GainNode;
   private recent: number[] = [];
   private samples: Record<string, AudioBuffer[]> = {};
   volume: Volume = "high";
-  roomTone = false;
   /** Vibrate on the strike and on pots (only where the device can, and only after touch input). */
   haptics = false;
 
@@ -112,10 +109,6 @@ export class Sound {
     this.master.connect(clip).connect(ctx.destination);
 
     const sr = ctx.sampleRate;
-    this.noise = ctx.createBuffer(1, sr * 2, sr);
-    const d = this.noise.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-
     // The room: a pool hall, medium size, soft furnishings. A few early reflections, then a tail whose highs
     // die faster than its lows.
     const len = Math.floor(sr * 0.9);
@@ -146,19 +139,6 @@ export class Sound {
     this.wet = ctx.createGain();
     this.wet.gain.value = 0.22;
     this.wet.connect(conv).connect(this.master);
-
-    // Room tone: the air of a quiet hall, very low. Off unless asked for.
-    const rsrc = ctx.createBufferSource();
-    rsrc.buffer = this.noise;
-    rsrc.loop = true;
-    const rlp = ctx.createBiquadFilter();
-    rlp.type = "lowpass";
-    rlp.frequency.value = 260;
-    rlp.Q.value = 0.5;
-    this.room = ctx.createGain();
-    this.room.gain.value = this.roomTone ? 0.05 : 0;
-    rsrc.connect(rlp).connect(this.room).connect(this.master);
-    rsrc.start();
 
     void this.load();
   }
@@ -195,12 +175,6 @@ export class Sound {
     this.volume = v;
     if (this.ctx)
       this.master.gain.setTargetAtTime(GAIN[v], this.ctx.currentTime, 0.02);
-  }
-
-  setRoomTone(on: boolean) {
-    this.roomTone = on;
-    if (this.ctx)
-      this.room.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.3);
   }
 
   private buzz(ms: number) {

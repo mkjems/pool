@@ -1051,15 +1051,6 @@ function toggleSound() {
   const saved = store.get("volume") as Volume | null;
   setVolume(saved && VOLUMES.includes(saved) ? saved : store.get("muted") === "1" ? "off" : "high");
 }
-const roomBtn = $("#b-room");
-function setRoom(on: boolean) {
-  sound.setRoomTone(on);
-  roomBtn.classList.toggle("on", on);
-  roomBtn.setAttribute("aria-pressed", String(on));
-  store.set("room", on ? "1" : "0");
-}
-setRoom(store.get("room") === "1");
-roomBtn.addEventListener("click", () => { sound.unlock(); setRoom(!sound.roomTone); });
 guideBtn.addEventListener("click", () => setGuide(guideLevel === "full" ? "short" : guideLevel === "short" ? "off" : "full"));
 $("#b-cloth").addEventListener("click", cycleCloth);
 soundBtn.addEventListener("click", cycleVolume);
