@@ -290,6 +290,10 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 14px;
+  box-sizing: border-box;
+  /* Clear of the notch, the home bar and the screen edges, so Centre and Done are easy to reach. */
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: rgba(4, 4, 5, 0.6);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -300,6 +304,10 @@ button:focus-visible {
 .spin-pad .pad {
   position: relative;
   width: min(64vmin, 260px);
+  /* Sideways on a phone the height is what runs out: leave room for the hint, the buttons and the margins
+     (dvh: the height actually visible, without Safari's bars). */
+  width: min(64vmin, 260px, calc(100dvh - 170px));
+  flex-shrink: 0;
   aspect-ratio: 1;
   border-radius: 50%;
   touch-action: none;
