@@ -90,7 +90,7 @@ front edge of each hole is round, never straight (the user: "that is not how poo
 **What the user has said so far** (the game should keep these):
 - Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.
 - No permanent helpers on the table: rings under the balls were rejected. Rings now show only with the
-  number labels (Space / Numbers).
+  number labels (hold Space).
 - Shadows must blend with the cloth, never black halos (now three lamp shadows, light and crisp, plus a
   gentle contact shadow).
 - Aiming with the mouse must work near the window edges: power is the drag distance in any direction.
@@ -548,7 +548,8 @@ Sizes are relative: S, M, L.
       `src/sim/rules.ts`, pure and deterministic like the physics, so the computer and the network can use it.
 - [x] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
       Rings under your balls are shown only with the labels: permanent rings were not liked (17 November).
-      Labels: hold Space, or the Numbers button on touch. The ghost ball turns red for an illegal first hit.
+      Labels: hold Space (the Numbers button was removed 24 November, the user asked for it gone). The ghost
+      ball turns red for an illegal first hit.
 - [x] Ball in hand, calling the 8, pass-and-play, rematch.
       Ball in hand: drag the cue ball (it sits above the finger on touch). The 8's pocket is called from
       the guide; tap a pocket to change it.

@@ -1020,7 +1020,7 @@ $("#b-invite-cancel").addEventListener("click", () => { leaveOnline(); mode = "p
   }
 }
 
-const guideBtn = $("#b-guide"), soundBtn = $("#b-sound"), labelsBtn = $("#b-labels");
+const guideBtn = $("#b-guide"), soundBtn = $("#b-sound");
 function setGuide(l: GuideLevel) { guideLevel = l; store.set("guide", l); guideBtn.textContent = `Guide: ${l}`; guideDirty = true; }
 setGuide(guideLevel);
 function cycleCloth() {
@@ -1054,7 +1054,6 @@ function toggleSound() {
 guideBtn.addEventListener("click", () => setGuide(guideLevel === "full" ? "short" : guideLevel === "short" ? "off" : "full"));
 $("#b-cloth").addEventListener("click", cycleCloth);
 soundBtn.addEventListener("click", cycleVolume);
-labelsBtn.addEventListener("click", () => { labels = !labels; labelsBtn.classList.toggle("on", labels); });
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Shift") fine = true;
@@ -1074,7 +1073,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => {
   if (e.key === "Shift") fine = false;
-  if (e.key === " ") labels = labelsBtn.classList.contains("on");
+  if (e.key === " ") labels = false;
 });
 /**
  * Fit the table to the screen. On small screens, first measure how far each control reaches in from the edge it
@@ -1379,7 +1378,7 @@ function frame(now: number) {
   const aiming = state === "aim";
   if (aiming && guideDirty && !watching()) computeGuide();
   if (!aiming || watching()) guide.hide();
-  // Which balls are yours: soft rings, only while asking for help (Space or the Numbers button).
+  // Which balls are yours: soft rings, only while asking for help (holding Space).
   if (aiming && labels && ruled() && !game.breakShot) {
     const t = target(game, balls);
     markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
