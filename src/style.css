@@ -556,6 +556,21 @@ button:focus-visible {
   color: var(--accent);
   letter-spacing: 0.18em;
   font-size: 18px;
+  /* Selectable in one piece (the page is not), and a tap copies it. */
+  -webkit-user-select: all;
+  user-select: all;
+  -webkit-touch-callout: default;
+  cursor: pointer;
+  padding: 2px 4px 2px 10px;
+  margin-left: 4px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+#invite .code strong:hover,
+#invite .code strong:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .net {
   position: absolute;

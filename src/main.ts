@@ -1046,6 +1046,14 @@ $("#b-copy").addEventListener("click", async () => {
   const url = $<HTMLInputElement>("#invite-link").value;
   try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { $<HTMLInputElement>("#invite-link").select(); }
 });
+// The code copies on a tap or click; it is also selectable by hand (user-select: all) if copying is refused.
+const copyCode = async () => {
+  const el = $("#invite-code");
+  try { await navigator.clipboard.writeText(el.textContent ?? ""); toast("Code copied"); }
+  catch { getSelection()?.selectAllChildren(el); }
+};
+$("#invite-code").addEventListener("click", copyCode);
+$("#invite-code").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void copyCode(); } });
 $("#b-share").addEventListener("click", () => {
   void navigator.share?.({ title: "Pool", text: "Play a game of pool with me", url: $<HTMLInputElement>("#invite-link").value }).catch(() => {});
 });

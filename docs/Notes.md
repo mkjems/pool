@@ -1,13 +1,10 @@
 Notes while playing the game:
 
-- ~~When setting up playing with a friend. We should not use 'name' in the form. It triggers some serious prefilling.
-This is a game, so lets use nicknames and fun names~~ Done: a random fun nick, a dice to roll another, no autofill.
+- ~~The play-a-friend short-code should be selectable/copyable from the screen~~ Done: a tap copies it, and it selects in one piece.
 
 - We should give the powerbar a distinct look. So it's not just a faint thin line when unused.
 
 - We should add some nice artisan separators to the popup menus to separate things into logical sections
-
-- The play a friend short code should be selectable/copyable from the screen
 
 - On the phone it's sometimes hard to aim in the direction you want. Actually, this is not so much a problem, but it is not as intuitive as the game '8 ball pool'
 

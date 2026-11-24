@@ -345,6 +345,10 @@ async function pair(open) {
   await a.click("#b-invite");
   await a.waitForFunction(() => document.querySelector("#invite-code").textContent.length === 4);
   const code = await a.textContent("#invite-code");
+  await a.click("#invite-code");
+  const copied = await a.evaluate(() => [document.querySelector("#toast").textContent, String(getSelection()),
+    getComputedStyle(document.querySelector("#invite-code")).userSelect]);
+  check((copied[0] === "Code copied" || copied[1] === code) && copied[2] === "all", "the code copies or selects", JSON.stringify(copied));
   await b.click("#b-online");
   await b.fill("#join-code", code.toLowerCase());
   await b.click("#b-join");

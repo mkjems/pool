@@ -415,7 +415,8 @@ Recommended simplification: only the 8 needs a called pocket. Full call-shot can
 - "Play a friend" gives a link and a code. The friend opens it and the game starts. A nickname, kept
   in the browser: a random fun one to start with (`src/nicks.ts`), a dice button rolls another. The box
   avoids the word "name" in every attribute and has autofill off, as browsers offered the player's real name
-  (the user, 24 November).
+  (the user, 24 November). The code on the invite card copies on a tap ("Code copied") and selects in one
+  piece by hand, though the rest of the page is not selectable.
 - **While aiming**, the cue's position is sent some 10–15 times a second, so you watch your friend aim live.
 - **A shot** is one small message: direction, speed, spin, cue angle. Both browsers play it on their own
   physics. At rest they compare a checksum; if it ever differs, the shooter's position is taken and the
