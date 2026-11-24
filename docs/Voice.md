@@ -99,6 +99,9 @@ throttled; optional). Keep it out of the way on phones in portrait.
 - [x] 4. Browser test with the fake mic. (24 November; "friend match: voice chat both ways, and back after a
   reload", in 2-3 s)
 - [ ] 5. The user tries it on two phones (Wi-Fi and mobile data, an iPhone); table sounds and fps checked.
+  - 24 November, the user: a desktop browser against a phone on pool.mkjems.dk "works perfectly", and voice
+    came back smoothly after a reload. Still to try: a phone on mobile data, the table sounds on an iPhone
+    with voice on.
 - [ ] 6. TURN, if step 5 shows it is needed (ask the user which).
 
 ## As built (24 November)

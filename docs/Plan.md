@@ -12,9 +12,9 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 **Pick up here (24 November):** **voice chat in friend matches** is built (steps 1-4 of
 [docs/Voice.md](Voice.md), see "As built" there), committed, not pushed. A Voice button in the top bar in a friend
-match (V); the friend is heard as soon as their mic is on; their mic shows by their name. Next: step 5, the user
-tries it on two phones through https://pool.mkjems.dk (voice needs https, so not over the local network): Wi-Fi
-and mobile data, an iPhone for the table sounds with voice on. If it fails on mobile data only: TURN (step 6, ask
+match (V); the friend is heard as soon as their mic is on; their mic shows by their name. Pushed and live. Step 5: the user played
+a desktop browser against a phone, "works perfectly", reload smooth (24 November). Still to try: a phone on mobile
+data, an iPhone's table sounds with voice on. If it fails on mobile data only: TURN (step 6, ask
 which). Then step 3 of the replays, the cinematic break.
 
 **Open (24 November, the user):** the balls are not clear enough on a phone; that is the real problem
