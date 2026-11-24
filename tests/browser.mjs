@@ -15,7 +15,8 @@ const HEAD_X = -1.981 / 4;
 const vite = await createServer({ server: { port: 5390, host: "127.0.0.1" }, logLevel: "error" });
 await vite.listen();
 const base = `${vite.resolvedUrls.local[0]}?test`;
-const browser = await chromium.launch({ args: GPU });
+// A fake microphone (a beeping tone) that needs no permission prompt, for voice chat.
+const browser = await chromium.launch({ args: [...GPU, "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 
 let failed = 0;
 const results = [];
@@ -453,6 +454,43 @@ await scenario("friend match: replays on both screens; the player in turn starts
   check(!(await pool(b, () => window.__pool.camAway())), "top-down for the friend too");
   for (const p of [a, b]) await waitState(p, "aim", 30000);
   await agree(a, b, "the same table after the replays");
+});
+
+await scenario("friend match: voice chat both ways, and back after a reload", async (open) => {
+  const { a, b } = await pair(open);
+  const voice = (p) => pool(p, () => window.__pool.voice());
+  /** Until this page has the friend's audio coming in, more of it than `after` bytes. */
+  const hears = (p, after = 0) => p.waitForFunction(async (after) => {
+    const v = await window.__pool.voice();
+    return v.state === "connected" && v.received > after + 2000;
+  }, after, { timeout: 15000, polling: 250 });
+  const micShown = (p, seat) => p.isVisible(`.score .p[data-p='${seat}'] .voice`);
+  for (const p of [a, b]) check((await p.textContent("#b-voice")) === "Voice: off", "a Voice button, off, in a friend match");
+  // Anna turns her mic on: Bo hears her without turning his on, and sees her mic by her name.
+  await a.click("#b-voice");
+  await hears(b);
+  await a.waitForFunction(() => document.querySelector("#b-voice").textContent === "Voice: on");
+  check(await micShown(b, 0), "Bo sees Anna's mic");
+  check(!(await micShown(a, 1)), "Anna doesn't see a mic by Bo (his is off)");
+  check((await voice(b)).playing, "Bo's page plays her audio");
+  // Bo answers with V: the same connection (no new offer), now both ways.
+  const id = (await voice(a)).id;
+  await b.keyboard.press("v");
+  await hears(a);
+  await a.waitForSelector(".score .p[data-p='1'] .voice:not([hidden])");
+  check((await voice(a)).id === id, "turning a mic on keeps the connection");
+  // Bo reloads: his mic is off again (browsers ask for a tap); Anna's voice reaches him on a new connection.
+  await b.reload();
+  await b.waitForFunction(() => window.__pool?.online().match && window.__pool.state() === "aim", null, { timeout: 20000 });
+  await hears(b);
+  check((await voice(b)).id !== id, "a new connection after the reload");
+  check((await b.textContent("#b-voice")) === "Voice: off", "Bo's mic is off after the reload");
+  await a.waitForSelector(".score .p[data-p='1'] .voice", { state: "hidden" });
+  // Anna turns hers off: Bo's indicator goes.
+  await a.click("#b-voice");
+  await b.waitForSelector(".score .p[data-p='0'] .voice", { state: "hidden" });
+  check((await a.textContent("#b-voice")) === "Voice: off", "Anna's mic off");
+  check(!(await voice(a)).mic, "and released");
 });
 
 await scenario("friend match: a dropped connection shows a banner until the friend is back", async (open) => {

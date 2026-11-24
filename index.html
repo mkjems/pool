@@ -48,12 +48,13 @@
         <button id="b-guide" title="Aim guide (G)">Guide: full</button>
         <button id="b-cloth" title="Cloth colour (C)">Cloth</button>
         <button id="b-sound" title="Volume (M mutes)">Sound: high</button>
+        <button id="b-voice" title="Talk to your friend (V)" aria-pressed="false" hidden>Voice: off</button>
       </nav>
     </header>
     <div id="score" class="score" hidden>
-      <div class="p" data-p="0"><span class="name">Player 1</span><span class="tray"></span></div>
+      <div class="p" data-p="0"><span class="name">Player 1</span><span class="voice" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg></span><span class="tray"></span></div>
       <div id="potted" class="potted" title="Potted" hidden></div>
-      <div class="p" data-p="1"><span class="name">Player 2</span><span class="tray"></span></div>
+      <div class="p" data-p="1"><span class="name">Player 2</span><span class="voice" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg></span><span class="tray"></span></div>
     </div>
     <div id="power" class="power" aria-label="Power: drag down and release to shoot">
       <div class="track">

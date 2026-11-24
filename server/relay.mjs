@@ -10,9 +10,10 @@
 //
 // Messages are JSON, { t: type, ... }:
 //   from a player  host {name, v} · join {code, name, v} · rejoin {code, seat, key, v} · name {name} · bye
-//                  start {id, seed, breaker} · shot {id, n, ...} · aim {...} · replay {id, n, low} · skip {id, n} (these three passed on, not kept) · ping
+//                  start {id, seed, breaker} · shot {id, n, ...} · aim {...} · replay {id, n, low} · skip {id, n} ·
+//                  voice {d} (voice chat's setup, src/net/voice.ts) (these four passed on, not kept) · ping
 //   to a player    room {code, seat, key, names} · joined {names} · names {names} · catchup {code, seat, names,
-//                  start, last} · start {by, ...} (to both) · shot/aim/replay/skip (the other's) · left {seat} · back {seat} · gone {seat} (left
+//                  start, last} · start {by, ...} (to both) · shot/aim/replay/skip/voice (the other's) · left {seat} · back {seat} · gone {seat} (left
 //                  for good) · reload (the other runs a newer version) · error {message} · pong
 
 import { randomBytes } from "node:crypto";
@@ -102,7 +103,7 @@ export function attachRelay(server, { delay = 0 } = {}) {
         if (!room.start || m.id !== room.start.id) return; // a late shot from an earlier match
         room.last = m;
         send(other(), m);
-      } else if (m.t === "aim" || m.t === "replay" || m.t === "skip") {
+      } else if (m.t === "aim" || m.t === "replay" || m.t === "skip" || m.t === "voice") {
         send(other(), m);
       } else if (m.t === "bye") {
         room.seats[seat] = null;

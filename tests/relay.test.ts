@@ -57,6 +57,9 @@ describe("friend-match relay", () => {
     expect(await b.next("replay")).toMatchObject({ n: 0, low: true });
     a.send({ t: "skip", id: "m1", n: 0 });
     expect(await b.next("skip")).toMatchObject({ n: 0 });
+    b.send({ t: "voice", d: { on: true } });
+    expect(await a.next("voice")).toMatchObject({ d: { on: true } }); // voice chat's setup, to the other only
+    expect(b.has("voice")).toBe(false);
     b.send({ t: "shot", id: "m1", n: 1, shot: { speed: 3 } });
     expect(await a.next("shot")).toMatchObject({ n: 1 });
     b.send({ t: "name", name: "  Bodil  " });

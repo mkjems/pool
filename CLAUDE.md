@@ -31,6 +31,7 @@ is done (tick steps, move **Current phase**, add short notes under steps).
 - `src/main.ts`: the frame loop, input, menus, the game modes (computer, two players, practice, a friend
   online), scoreboard.
 - `src/net/net.ts` and `server/relay.mjs`: friend matches. The relay also runs inside `npm run dev`.
+  `src/net/voice.ts`: voice chat in friend matches (WebRTC, browser to browser; needs https or localhost).
 - `src/sim/rules.ts`: 8-ball rules (pure, like the physics); written out for players in `docs/Rules.md`.
 
 ## Rules of thumb

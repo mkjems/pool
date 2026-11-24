@@ -370,6 +370,23 @@ button:focus-visible {
   font-size: 13px;
   white-space: nowrap;
 }
+/* The friend's mic is on (voice chat); dim while connecting. */
+.score .voice {
+  display: inline-flex;
+  margin-left: -4px;
+  color: var(--accent);
+}
+.score .voice[hidden] {
+  display: none;
+}
+.score .voice.wait {
+  opacity: 0.4;
+}
+.score .voice svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
 .score .tray {
   display: flex;
   gap: 3px;

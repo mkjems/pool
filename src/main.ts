@@ -22,6 +22,7 @@ import { Markers } from "./render/markers";
 import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
 import { Link, savedSeat, type AimMsg, type FromRelay, type ReplayMsg, type ShotMsg, type Start } from "./net/net";
+import { Voice } from "./net/voice";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over" | "replay";
 type Mode = "practice" | "pass" | "cpu" | "online";
@@ -202,6 +203,19 @@ function connect(l: Link) {
   link?.end();
   link = l;
   l.onMessage = onNet;
+  endVoice();
+  if (Voice.available()) {
+    const v = new Voice((d) => l.send({ t: "voice", d }), seat === 0);
+    let friendWas = false;
+    v.onChange = () => {
+      // The friend turned their mic on: say so once, and how to answer.
+      if (v.friendOn && !friendWas && !v.mic) toast(`${friendName()} turned voice on. Press Voice to talk.`);
+      friendWas = v.friendOn;
+      updateVoiceUI();
+    };
+    v.onError = toast;
+    voice = v;
+  }
   l.onStatus = (s) => { if (s === "down") netBanner("Connection lost. Reconnecting…"); else if (s === "open") awayBanner(); };
 }
 
@@ -248,7 +262,40 @@ function joinMatch(code: string) {
   showInvite("Joining your friend's game…", null);
 }
 
+// Voice chat (src/net/voice.ts): a button in the top bar during a friend match, and a mic by the friend's name
+// while theirs is on.
+let voice: Voice | null = null;
+const voiceBtn = $<HTMLButtonElement>("#b-voice");
+function endVoice() {
+  voice?.close();
+  voice = null;
+  updateVoiceUI();
+}
+function updateVoiceUI() {
+  const hide = !voice || !match;
+  if (voiceBtn.hidden !== hide) { voiceBtn.hidden = hide; fitView(); }
+  const st = voice?.status ?? "off";
+  voiceBtn.textContent = st === "connecting" ? "Voice: connecting" : `Voice: ${st}`;
+  voiceBtn.classList.toggle("on", st === "on");
+  voiceBtn.setAttribute("aria-pressed", String(st !== "off"));
+  voiceBtn.title = st === "on" ? `${friendName()} hears you. Press to turn your mic off (V)`
+    : st === "connecting" ? `Connecting to ${friendName()}… (V turns your mic off)` : `Talk to ${friendName()} (V)`;
+  document.querySelectorAll<HTMLElement>(".score .voice").forEach((el, i) => {
+    const on = !!voice && !!match && i !== seat && voice.friendOn;
+    el.hidden = !on;
+    el.classList.toggle("wait", on && !voice!.hearing);
+    el.title = on ? (voice!.hearing ? `${friendName()}'s mic is on` : `${friendName()}'s mic is on. Connecting…`) : "";
+  });
+}
+function toggleVoice() {
+  if (!voice || !match) return;
+  sound.unlock();
+  void voice.setMic(!voice.mic);
+}
+voiceBtn.addEventListener("click", toggleVoice);
+
 function leaveOnline() {
+  endVoice();
   link?.bye();
   link = null;
   match = null;
@@ -276,9 +323,14 @@ function beginMatch(m: Start) {
   $("#invite").hidden = true;
   startGame("online", m.breaker, m.seed);
   awayBanner();
+  updateVoiceUI();
 }
 
 function onNet(m: FromRelay) {
+  netMessage(m);
+  if (m.t !== "catchup") voice?.setPresent(friendHere);
+}
+function netMessage(m: FromRelay) {
   switch (m.t) {
     case "room":
       seat = m.seat;
@@ -307,6 +359,7 @@ function onNet(m: FromRelay) {
       // A shot of ours that never reached the relay goes again.
       if (myLastShot && myLastShot.id === match!.id && (!m.last || m.last.n < myLastShot.n)) link?.send(myLastShot);
       awayBanner();
+      voice?.rejoined(m.present);
       break;
     case "start":
       if (m.by !== seat) friendHere = true;
@@ -320,6 +373,9 @@ function onNet(m: FromRelay) {
       break;
     case "replay":
       if (match && m.id === match.id) remoteReplay = m;
+      break;
+    case "voice":
+      voice?.signal(m.d);
       break;
     case "skip":
       if (!match || m.id !== match.id) break;
@@ -337,6 +393,7 @@ function onNet(m: FromRelay) {
       break;
     case "gone":
       friendHere = false;
+      endVoice();
       link?.end();
       link = null;
       netBanner(null);
@@ -344,6 +401,7 @@ function onNet(m: FromRelay) {
       if (state !== "menu") { state = "over"; showOver(`${friendName()} left`, "The match is over.", false); }
       break;
     case "error":
+      endVoice();
       link = null;
       match = null;
       netBanner(null);
@@ -1033,8 +1091,10 @@ soundBtn.addEventListener("click", cycleVolume);
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Shift") fine = true;
+  if (e.target instanceof HTMLInputElement) return; // typing a name or a code
   const k = e.key.toLowerCase();
   if (k === "g") guideBtn.click();
+  else if (k === "v" && !e.repeat) toggleVoice();
   else if (k === "c") cycleCloth();
   else if (k === "m") toggleSound();
   else if (k === "escape") { power = 0; setPowerUI(0); mouseDown = null; spinPad.hidden = true; showReplayMenu(false); skipReplay(); }
@@ -1396,6 +1456,8 @@ if (new URLSearchParams(location.search).has("test")) {
     shoot: (p: number) => shoot(p),
     quality: () => view.quality,
     online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names, queued: remoteShots.length }),
+    /** Voice chat: our mic, the friend's, the connection, and how much of the friend's audio has arrived. */
+    voice: () => voice?.stats() ?? null,
     timeScale: (k: number) => { timeScale = k; },
     replay: (low = false) => startReplay(low),
     replayPhase: () => replaying?.phase ?? null,

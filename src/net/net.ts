@@ -4,6 +4,7 @@
 
 import type { Ball, Shot } from "../sim/physics";
 import type { GameState, Player } from "../sim/rules";
+import type { VoiceSignal } from "./voice";
 
 export interface Start { id: string; seed: number; breaker: Player }
 /** A shot: the shooter's exact position and game before it, and the shot. Both browsers play it. */
@@ -25,6 +26,7 @@ export type FromRelay =
   | AimMsg
   | ReplayMsg
   | SkipMsg
+  | { t: "voice"; d: VoiceSignal }
   | { t: "left" | "back" | "gone"; seat: Player }
   | { t: "reload" }
   | { t: "error"; message: string; over?: boolean }
