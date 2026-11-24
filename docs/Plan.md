@@ -10,6 +10,9 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 ## Next session
 
+**Open (24 November, the user):** the balls are not clear enough on a phone; that is the real problem
+behind the number labels and the rings, which are gone (see phase 4). To be dealt with later.
+
 **Pick up here (21 November, later):** step 2b, **highlight replays**, comes before the cinematic break (the
 user, 21 November): replays play by themselves for the winning shot and for nice shots, in every mode but
 practice (manual there); in friend matches the player in turn may play a replay on both screens. Step 2b is
@@ -89,8 +92,9 @@ front edge of each hole is round, never straight (the user: "that is not how poo
 
 **What the user has said so far** (the game should keep these):
 - Smoothness matters most. It was unplayable at 20 fps; keep 60 fps at 2×.
-- No permanent helpers on the table: rings under the balls were rejected. Rings now show only with the
-  number labels (hold Space).
+- No helpers on the table: rings under the balls were rejected, and so were number labels and rings on demand
+  (Space, a Numbers button; removed 24 November: "everything about that was a bad idea"). The balls themselves
+  must be readable.
 - Shadows must blend with the cloth, never black halos (now three lamp shadows, light and crisp, plus a
   gentle contact shadow).
 - Aiming with the mouse must work near the window edges: power is the drag distance in any direction.
@@ -153,7 +157,7 @@ kicks in its planning.
 
 **How to check the look and speed.** Run the dev server, open `http://localhost:5173/?test` in the Playwright
 browser, and drive it through `window.__pool` (`start('cpu' | 'pass' | 'practice')`, `place([[id, x, y], ...])`,
-`setGame({...})`, `aimAt(x, y)`, `screen(x, y)`, `shoot(power)`, `labels(true)`, `quality()`). Use real
+`setGame({...})`, `aimAt(x, y)`, `screen(x, y)`, `shoot(power)`, `quality()`). Use real
 `page.mouse` events when testing input. Frame time: count 60 `requestAnimationFrame` intervals and take the
 median; the user's window is about 2560 × 1300 CSS pixels at device pixel ratio 2. If the Playwright
 browser is locked by another session, a Node script importing `playwright` (it is in the npx cache) and
@@ -249,10 +253,8 @@ You noticed this is hard in the reference game. The causes, and what we do about
 | A striped ball seen with its band facing up looks almost fully coloured | Narrower band than on real balls (about 40% of the ball rather than 55%), so a clear white cap shows from every angle. Checked by rendering each ball from many angles and measuring the white share. |
 | A solid's white number spot can pass for a stripe's white | Small number spots on solids; stripes get a bright, slightly warm white that reads differently from a highlight. |
 | Similar colours: 3 red against 7 maroon, 4 purple against 8 black | A palette chosen for separation on screen, as television ball sets do (lighter 7, pinker 4). A colour-blind set as an option. |
-| The real question is "which are mine?" | Your balls get a soft ring of light on the cloth while you aim (can be switched off). |
-| | The ghost ball at the end of the aim line turns red when the first ball you would hit isn't yours. |
+| The real question is "which are mine?" | The ghost ball at the end of the aim line turns red when the first ball you would hit isn't yours. |
 | | A tray per player shows the balls left as flat icons, always facing you. Hovering or tapping one lights up that ball on the table. |
-| | Hold a key (Space) or a button and every ball shows a flat label: full colour for solids, white with a band for stripes. |
 
 The first four make the balls themselves readable; the last four mean you never have to read them. Both, because
 realism and readability pull in opposite directions on a small screen.
@@ -546,10 +548,10 @@ Sizes are relative: S, M, L.
 
 - [x] `docs/Rules.md`, the rules engine, its tests.
       `src/sim/rules.ts`, pure and deterministic like the physics, so the computer and the network can use it.
-- [x] Score display, ball trays, "which are mine" markers, hold-to-label, messages for fouls.
-      Rings under your balls are shown only with the labels: permanent rings were not liked (17 November).
-      Labels: hold Space (the Numbers button was removed 24 November, the user asked for it gone). The ghost
-      ball turns red for an illegal first hit.
+- [x] Score display, ball trays, messages for fouls. The ghost ball turns red for an illegal first hit.
+      Rings under your balls: permanent rings were not liked (17 November); rings and number labels on demand
+      (hold Space, or the Numbers button) were removed 24 November (the user: a bad idea; the root problem is
+      that the balls aren't clear enough on a phone).
 - [x] Ball in hand, calling the 8, pass-and-play, rematch.
       Ball in hand: drag the cue ball (it sits above the finger on touch). The 8's pocket is called from
       the guide; tap a pocket to change it.
@@ -703,7 +705,7 @@ to make clips for spreading the word). Four steps:
   - To judge: whether the button is found now, the slow-motion speed, the darkened edges.
 - [x] 2. A camera director and a low camera: the winning shot replayed automatically, from low, ending on the
   pocket. Always ends on the fitted top view. Needs visible lamp shades above the table and a look at the cloth
-  and shadows at grazing angles. HUD, labels and markers hidden while it plays. (21 November)
+  and shadows at grazing angles. HUD and markers hidden while it plays. (21 November)
   - `src/render/director.ts`: `cut`, `glide`, `home` between poses (eye, look, up, fov, picture shift; table
     coordinates). The top view is `view.home`, worked out by `resize`; while `view.free` the director has the
     camera. Up turns smoothly from the cloth's up to the top view's, so the rise turns the table into place.
@@ -757,7 +759,7 @@ to make clips for spreading the word). Four steps:
     drop; then the card. Slow motion (`cineRate`, by simulated time) for the stroke and first contact and
     round each beat; normal speed between. `__pool.replay(true)` replays any shot with a pot this way;
     `__pool.cine()` shows the plan. A click skips it, camera straight home. `body.cinema` fades out the bar,
-    score, power, spin and labels; the badge moves to the top (the dark room).
+    score, power and spin; the badge moves to the top (the dark room).
   - Lamps (`src/render/lamps.ts`): three dark green shades on a bar, bright diffusers, rods up into the dark,
     fading out as the camera rises from 0.55 to 0.85 m (from the top view they would stand in front of the cloth).
   - Low angles: cushion faces were black (one light from straight above); the lamps now light faces that

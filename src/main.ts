@@ -9,7 +9,7 @@ import { Sim, cloneBalls, fingerprint, type Ball, type Shot, type SimEvent } fro
 import { ball, rack8, rng } from "./sim/rack";
 import { HEAD_X, TABLE } from "./sim/table";
 import { HIGHLIGHT, highlight, type Highlight } from "./sim/highlight";
-import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, target, type GameState, type Player } from "./sim/rules";
+import { advanceGame, groupOf, judge, legalFirst, newGame, onEight, remaining, type GameState, type Player } from "./sim/rules";
 import { makeView, applyEnvironment } from "./render/scene";
 import { Director, pose } from "./render/director";
 import { planCine, cineRate, TABLE_CORNERS, type Cine } from "./render/cinema";
@@ -81,7 +81,6 @@ let guideDirty = true;
 let guideFirst = -1; // the ball the guide says gets hit first
 let called: number | null = null; // pocket called for the 8
 let calledByUser = false;
-let labels = false;
 let clock = 0;
 let breaker: Player = 0;
 // Ball positions one physics step back, to draw smoothly between steps (a frame holds 6.67 steps at 60 Hz).
@@ -670,29 +669,6 @@ function miniBall(id: number, gone = false): HTMLElement {
   return s;
 }
 
-// ------------------------------------------------------------------ number labels
-
-const labelEls: HTMLElement[] = [];
-for (let id = 1; id <= 15; id++) {
-  const el = document.createElement("div");
-  el.className = "label";
-  el.style.background = flatBall(id);
-  el.innerHTML = `<span>${id}</span>`;
-  el.hidden = true;
-  $("#labels").appendChild(el);
-  labelEls[id] = el;
-}
-function updateLabels(cur: readonly Ball[]) {
-  for (let id = 1; id <= 15; id++) {
-    const b = cur[id], el = labelEls[id];
-    el.hidden = !labels || !b.on;
-    if (el.hidden) continue;
-    const p = view.toScreen(b.x, b.y, R * 2);
-    el.style.left = `${p.x}px`;
-    el.style.top = `${p.y}px`;
-  }
-}
-
 // ------------------------------------------------------------------ aim guide
 
 function computeGuide() {
@@ -1057,7 +1033,6 @@ soundBtn.addEventListener("click", cycleVolume);
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Shift") fine = true;
-  if (e.key === " ") { labels = true; e.preventDefault(); return; }
   const k = e.key.toLowerCase();
   if (k === "g") guideBtn.click();
   else if (k === "c") cycleCloth();
@@ -1073,7 +1048,6 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => {
   if (e.key === "Shift") fine = false;
-  if (e.key === " ") labels = false;
 });
 /**
  * Fit the table to the screen. On small screens, first measure how far each control reaches in from the edge it
@@ -1378,14 +1352,8 @@ function frame(now: number) {
   const aiming = state === "aim";
   if (aiming && guideDirty && !watching()) computeGuide();
   if (!aiming || watching()) guide.hide();
-  // Which balls are yours: soft rings, only while asking for help (holding Space).
-  if (aiming && labels && ruled() && !game.breakShot) {
-    const t = target(game, balls);
-    markers.setRings(balls.filter((b) => b.on && b.id !== 0 && (t === "open" ? b.id !== 8 : groupOf(b.id) === t)));
-  } else markers.setRings([]);
   markers.setCall(aiming && ruled() && onEight(game, balls) ? called : null, clock);
   markers.setHand(balls[0].x, balls[0].y, aiming && ruled() && !watching() && inHand() !== "none", clock);
-  updateLabels(cur);
 
   if (replaying) {
     // The replay's cue: drawn back, then the stroke, from where the shot was played.
@@ -1426,7 +1394,6 @@ if (new URLSearchParams(location.search).has("test")) {
     aimAt: (x: number, y: number) => { aim.copy(new THREE.Vector2(x - balls[0].x, y - balls[0].y).normalize()); guideDirty = true; },
     setTip,
     shoot: (p: number) => shoot(p),
-    labels: (on: boolean) => { labels = on; },
     quality: () => view.quality,
     online: () => ({ seat, shotNo, match, friendHere, status: link?.status ?? null, names, queued: remoteShots.length }),
     timeScale: (k: number) => { timeScale = k; },

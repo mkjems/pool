@@ -42,7 +42,7 @@ body {
   inset: 0;
   pointer-events: none;
 }
-/* Only real controls take the pointer; full-screen layers (labels, toast, score, bar) let it through to the table. */
+/* Only real controls take the pointer; full-screen layers (toast, score, bar) let it through to the table. */
 #hud > button,
 #hud > .power,
 #hud > .spin-pad,
@@ -406,40 +406,6 @@ button:focus-visible {
 .potted[hidden] {
   display: none;
 }
-.labels {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.label {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font:
-    800 11px/1 Inter,
-    system-ui,
-    sans-serif;
-  color: #111;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-  border: 1.5px solid rgba(0, 0, 0, 0.5);
-}
-.label[hidden] {
-  display: none;
-}
-.label span {
-  background: #f6f2e8;
-  border-radius: 50%;
-  width: 13px;
-  height: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .menu {
   /* The card centres itself (margin: auto) and the page scrolls when it doesn't fit, as on a phone held sideways. */
   position: absolute;
@@ -676,15 +642,13 @@ button:focus-visible {
 .bar,
 .score,
 .power,
-.spin,
-.labels {
+.spin {
   transition: opacity 0.4s;
 }
 .cinema .bar,
 .cinema .score,
 .cinema .power,
 .cinema .spin,
-.cinema .labels,
 .cinema .toast {
   opacity: 0;
   pointer-events: none;
