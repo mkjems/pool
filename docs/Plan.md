@@ -17,6 +17,10 @@ a desktop browser against a phone, "works perfectly", reload smooth (24 November
 data, an iPhone's table sounds with voice on. If it fails on mobile data only: TURN (step 6, ask
 which). Then step 3 of the replays, the cinematic break.
 
+**Done (24 November), from [Notes.md](Notes.md):** friend matches use fun nicknames (dice) with no name autofill; the
+friend code copies on a tap; the power bar looks like a gauge when empty (recessed slot, gold rim, faint
+colours, notches every tenth, a ridged grip that stays inside the slot). Ask how the bar feels on the phone.
+
 **Open (24 November, the user):** the balls are not clear enough on a phone; that is the real problem
 behind the number labels and the rings, which are gone (see phase 4). To be dealt with later.
 

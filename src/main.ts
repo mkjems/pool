@@ -805,9 +805,11 @@ const power$ = $("#power"), fill$ = $("#power .fill"), knob$ = $("#power .knob")
 let powerAcross = false;
 function setPowerUI(p: number) {
   fill$.style.height = powerAcross ? "" : `${p * 100}%`;
-  knob$.style.top = powerAcross ? "" : `${p * 100}%`;
+  // The grip (10 px) stays inside the slot: its leading edge runs from 0 to the far end less its own size.
+  const at = `calc(${p * 100}% - ${p * 10}px)`;
+  knob$.style.top = powerAcross ? "" : at;
   fill$.style.width = powerAcross ? `${p * 100}%` : "";
-  knob$.style.left = powerAcross ? `${p * 100}%` : "";
+  knob$.style.left = powerAcross ? at : "";
 }
 
 let mouseDown: { x: number; y: number } | null = null;

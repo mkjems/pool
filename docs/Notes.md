@@ -1,8 +1,6 @@
 Notes while playing the game:
 
-- ~~The play-a-friend short-code should be selectable/copyable from the screen~~ Done: a tap copies it, and it selects in one piece.
-
-- We should give the powerbar a distinct look. So it's not just a faint thin line when unused.
+- ~~We should give the powerbar a distinct look. So it's not just a faint thin line when unused.~~ Done: a recessed slot with a gold rim, the colours faintly showing, notches, a ridged grip.
 
 - We should add some nice artisan separators to the popup menus to separate things into logical sections
 
