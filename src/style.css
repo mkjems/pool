@@ -576,7 +576,7 @@ button:focus-visible {
   border-color: var(--accent);
 }
 .menu p.or {
-  margin: 8px 0 0;
+  margin: 0;
   font-size: 13px;
 }
 .menu .row {
@@ -738,6 +738,28 @@ button:focus-visible {
 .cinema .replay-badge {
   top: max(4%, env(safe-area-inset-top));
 }
+/* Between the sections of a card: a brass inlay with three mother-of-pearl diamonds in the middle, like the
+   sights set into the rails of a pub table. The rule fades out towards the edges of the card. */
+.menu .sep {
+  display: flex;
+  align-items: center;
+  gap: 46px;
+  height: 9px;
+  margin: 5px 4px;
+  background: center / 36px 9px no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 9'%3E%3ClinearGradient id='p' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23fffaf0'/%3E%3Cstop offset='.55' stop-color='%23e6dcc6'/%3E%3Cstop offset='1' stop-color='%23b9ad93'/%3E%3C/linearGradient%3E%3Cg fill='%23000' fill-opacity='.35'%3E%3Cpath d='M6 1l3 4-3 4-3-4zM18 1l3 4-3 4-3-4zM30 1l3 4-3 4-3-4z'/%3E%3C/g%3E%3Cg fill='url(%23p)'%3E%3Cpath d='M6 0l3 4-3 4-3-4zM18 0l3 4-3 4-3-4zM30 0l3 4-3 4-3-4z'/%3E%3C/g%3E%3C/svg%3E");
+}
+.menu .sep::before,
+.menu .sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(214, 176, 104, 0.75));
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.menu .sep::after {
+  background: linear-gradient(to left, transparent, rgba(214, 176, 104, 0.75));
+}
 /* A text link, for going back. */
 .menu .card button.link {
   margin-top: 4px;
@@ -886,7 +908,6 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   padding: 3px;
-  margin: -2px 0 6px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.3);
   box-shadow:
