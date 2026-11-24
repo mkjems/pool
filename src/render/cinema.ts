@@ -85,9 +85,11 @@ function establish(w: THREE.Vector2, actors: THREE.Vector3[], aspect: number, mi
   }
   const tan = Math.tan(THREE.MathUtils.degToRad(elev));
   let D = Math.max(minD, toEdge(cx, cy, w.x, w.y) + 0.3), pose: Pose;
-  for (;; D += 0.1) {
+  // Counted, never "until it fits": a point that isn't a number once made this run forever and hung the page
+  // (24 November: a ball framed after it had gone down).
+  for (let k = 0; ; k++, D += 0.1) {
     pose = framed(new THREE.Vector3(cx + w.x * D, cy + w.y * D, clamp(D * tan, 0.4, 3)), points, aspect, minFov, 120);
-    if (pose.fov <= widen(maxFov, aspect) || D > 8) break;
+    if (pose.fov <= widen(maxFov, aspect) || D > 8 || k >= 80) break;
   }
   return { pose: framed(pose.eye, points, aspect, minFov, maxFov), D, points };
 }
@@ -120,25 +122,33 @@ function track(before: readonly Ball[], shot: Shot) {
     /** Every ball that moves between t0 and t1: where it is along the way (every 0.1 s, while on the table). */
     moving(t0: number, t1: number) {
       const out: THREE.Vector3[] = [];
+      const n = Math.max(0, Math.ceil((t1 - t0) / 0.1)) || 0;
       for (let id = 0; id < before.length; id++) {
         const path: THREE.Vector3[] = [];
         let moved = false;
-        for (let t = t0; ; t = Math.min(t1, t + 0.1)) {
-          const p = at(id, t);
-          if (!Number.isNaN(p.x)) {
-            if (path.length && p.distanceTo(path[path.length - 1]) > 0.002) moved = true;
-            path.push(p);
-          }
-          if (t >= t1) break;
+        for (let k = 0; k <= n; k++) {
+          const i = frame(k === 0 ? t0 : Math.min(t1, t0 + k * 0.1));
+          if (Number.isNaN(frames[i][id * 2])) continue; // down
+          const p = pos(id, i);
+          if (path.length && p.distanceTo(path[path.length - 1]) > 0.002) moved = true;
+          path.push(p);
         }
         if (moved) out.push(...path);
       }
       return out;
     },
   };
+  function frame(t: number) {
+    return clamp(Math.round(t / 0.01), 0, frames.length - 1) || 0;
+  }
+  function pos(id: number, i: number) {
+    return new THREE.Vector3(frames[i][id * 2], frames[i][id * 2 + 1], R);
+  }
+  /** Where the ball is at t; once it is down, where it was last on the table (the cameras frame it there). */
   function at(id: number, t: number) {
-    const f = frames[clamp(Math.round(t / 0.01), 0, frames.length - 1)];
-    return new THREE.Vector3(f[id * 2], f[id * 2 + 1], R);
+    let i = frame(t);
+    while (i > 0 && Number.isNaN(frames[i][id * 2])) i--;
+    return pos(id, i);
   }
 }
 

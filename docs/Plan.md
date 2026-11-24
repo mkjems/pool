@@ -10,6 +10,15 @@ two players on one device, and practice. Phases 2 and 3 still wait on your feel 
 
 ## Next session
 
+**Fixed (24 November, evening): the "crash" in friend matches** ([Notes.md](Notes.md)) was a hang. Chrome's
+reports (`~/Library/Application Support/Google/Chrome/Crashpad/completed/`, `is-dump-process-without-crashing`,
+main thread in JavaScript) were saved when the page stopped responding. Cause: `planCine` in `src/render/cinema.ts`
+framed a ball at a moment after it had gone down; its position was NaN, so the loop backing the camera away
+until everything fits never ended. That happens when a ball drops within 0.3 s (the 8 near a pocket, the winning
+shot, always replayed with camera angles) or the cue ball goes down before a later camera: 68 of 3000 random
+shots. Now a ball that is down is framed where it was last on the table, and the loop is counted.
+`tests/cinema.test.ts` covers it. Ask the user whether friend matches still hang.
+
 **Pick up here (24 November):** **voice chat in friend matches** is built (steps 1-4 of
 [docs/Voice.md](Voice.md), see "As built" there), committed, not pushed. A Voice button in the top bar in a friend
 match (V); the friend is heard as soon as their mic is on; their mic shows by their name. Pushed and live. Step 5: the user played
