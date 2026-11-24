@@ -340,8 +340,8 @@ await scenario("the computer plays its turn", async (open) => {
 async function pair(open) {
   const a = await open(), b = await open();
   await a.click("#b-online");
-  await a.fill("#name", "Anna");
-  await a.press("#name", "Enter");
+  await a.fill("#nick", "Anna");
+  await a.press("#nick", "Enter");
   await a.click("#b-invite");
   await a.waitForFunction(() => document.querySelector("#invite-code").textContent.length === 4);
   const code = await a.textContent("#invite-code");

@@ -23,6 +23,7 @@ import { Sound, VOLUMES, type Volume } from "./audio/sound";
 import type { Decision, Level } from "./ai/ai";
 import { Link, savedSeat, type AimMsg, type FromRelay, type ReplayMsg, type ShotMsg, type Start } from "./net/net";
 import { Voice } from "./net/voice";
+import { funNick } from "./nicks";
 
 type State = "menu" | "aim" | "stroke" | "run" | "over" | "replay";
 type Mode = "practice" | "pass" | "cpu" | "online";
@@ -184,7 +185,8 @@ let remoteAim: AimMsg | null = null;
 let remoteReplay: ReplayMsg | null = null;
 let aimSent = { at: -1, key: "" };
 let myLastShot: ShotMsg | null = null;
-let myName = store.get("name") ?? "";
+let myName = store.get("nick") || funNick();
+store.set("nick", myName);
 
 function netBanner(msg: string | null) {
   const b = $("#net");
@@ -1018,14 +1020,18 @@ $("#b-rematch").addEventListener("click", () => {
   newMatch(breaker === 0 ? 1 : 0);
 });
 
-// Friend matches: their own card (name, invite, join by code), then the invite card.
-const nameInput = $<HTMLInputElement>("#name");
-nameInput.value = myName;
-nameInput.addEventListener("change", () => {
-  myName = nameInput.value.trim().slice(0, 20);
-  store.set("name", myName);
+// Friend matches: their own card (nickname, invite, join by code), then the invite card.
+// The box avoids the word "name" everywhere: browsers would offer the player's real name.
+const nickInput = $<HTMLInputElement>("#nick");
+nickInput.value = myName;
+const setNick = (n: string) => {
+  myName = n.trim().slice(0, 20);
+  nickInput.value = myName;
+  store.set("nick", myName);
   link?.send({ t: "name", name: myName });
-});
+};
+nickInput.addEventListener("change", () => setNick(nickInput.value));
+$("#b-nick").addEventListener("click", () => setNick(funNick(20, myName)));
 $("#b-online").addEventListener("click", () => { $("#menu").hidden = true; $("#online").hidden = false; });
 $("#b-online-back").addEventListener("click", showMenu);
 $("#b-invite").addEventListener("click", hostMatch);

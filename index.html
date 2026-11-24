@@ -90,7 +90,11 @@
       <div class="card">
         <h1>Play a friend</h1>
         <p>Send them a link, or join theirs.</p>
-        <input id="name" placeholder="Your name" maxlength="20" autocomplete="nickname" aria-label="Your name">
+        <div class="row">
+          <input id="nick" placeholder="Pick a nick" maxlength="20" autocomplete="off" spellcheck="false"
+            data-1p-ignore data-lpignore="true" data-form-type="other" aria-label="What your friend sees you as">
+          <button id="b-nick" aria-label="Roll a new nick" title="Roll a new nick">🎲</button>
+        </div>
         <button id="b-invite" class="primary">Invite a friend</button>
         <p class="or">Got a code from a friend?</p>
         <div class="row">
